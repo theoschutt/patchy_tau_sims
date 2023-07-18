@@ -1,8 +1,6 @@
-##!/usr/bin/env python3
-"""filter_map.py: Applies beam and low- and high-pass filtering to an 
-image FITS file (e.g. from generateMockMaps).
-If used as main, expects as CLI args fits file name (including path),
-output file name prefix, and path to save directory.
+#!/usr/bin/env python3
+"""run_thumbstack.py: Run thumbstack on a given set of filtered
+maps.
 """
 import os, sys
 sys.path.append('../ThumbStack')
@@ -17,50 +15,141 @@ from flat_map import *
 
 def parse_args():
     import argparse
-    parser = argparse.ArgumentParser(description='Apply beam and LPF/HPF to a flatmap file.')
-    
-    parser.add_argument('--lpf_map',
-                        help='Full Path to the LPF flatmap FITS file')
-    parser.add_argument('--hpf_map',
-                        help='Full Path to the HPF flatmap FITS file')
-   parser.add_argument('--outpath',
-                        help='path to directory to save output files')
-   parser.add_argument('--filter_type', default='tauring',
-                        help='Choose thumbstack filter (can be string or list of strings)'
-   parser.add_argument('--filter_width', default=100.,
-                        help='LPF/HPF filter width for erf function filtering (i.e. `theo` filter_type)')
-    
+    parser = argparse.ArgumentParser(
+        description='Run thumbstack on a given set of filtered maps.')
+    parser.add_argument('--workdir',
+        default='/home/theo/Documents/research/CMB/patchy_tau_sims',
+        help='Full path to the LPF flatmap FITS file')
+    parser.add_argument('--lpfpath',
+        help='Full path to the LPF flatmap FITS file')
+    parser.add_argument('--hpfpath',
+        help='Full path to the HPF flatmap FITS file')
+    parser.add_argument('--catpath',
+        help='Full path to input catalog file')
+    parser.add_argument('--pix_scale',
+        default=0.5,
+        help='Pixel scale in arcmin/px')
+    parser.add_argument('--side_length',
+        default=10.,
+        help='Name of catalog (used in path)')
+    parser.add_argument('--ra_min',
+        default=200.,
+        help='Min RA of map')
+    parser.add_argument('--dec_min',
+        default=10.,
+        help='Min DEC of map')
+    parser.add_argument('--catname',
+        help='Name of catalog (used in path)')
+    parser.add_argument('--tsname',
+        help='Name for thumbstack output files')
+    parser.add_argument('--filtertype',
+        default='tauring',
+        help='Choose thumbstack filter (can be string or list of strings)'
+    parser.add_argument('--esttype',
+        default=['tau_ti_uniformweight', 'tau_sgn_uniformweight'],
+        help=('Choose thumbstack estimator and weight'
+              ' (can be string or list of strings)')
+    parser.add_argument('--dobootstrap',
+        default=True,
+        help='Boolean whether to compute bootstrap covariance')
+    parser.add_argument('--outpath',
+        help='Path to directory to save output files')
+ 
     args = parser.parse_args()
 
     return args
 
 def initialize():
-    u = ts.universe.UnivMariana()
-    massConversion = ts.mass_conversion.MassConversionKravtsov14()
+    u = UnivMariana()
+    massConversion = MassConversionKravtsov14()
 
-    boxmap, boxmask = make_box()
+    return u, massConversion
 
-    return u, massConversion, boxmap, boxmask
+def make_basemap(sizeX, sizeY, pixel_scale):
+    # sizeX, sizeY: map dimensions in degrees
 
-def make_box():
+    # number of pixels for the flat map
+    nX = int(sizeX * 60. / pixel_scale)
+    nY = int(sizeY * 60. / pixel_scale)
 
-    return boxmap, boxmask
+    # basic map object
+    baseMap = FlatMap(nX=nX, nY=nY,
+        sizeX=sizeX*np.pi/180., sizeY=sizeY*np.pi/180.)
+    
+    return baseMap
 
-def get_catalog():
+def make_box(side_length=10., ra_min=200., dec_min=10., pix_scale=0.5):
+    """Generate empty square map.
+    side_length, ra_min, and dec_min in degrees
+    pix_scale is in arcmin/px
+    """
+    ra_max = ra_min + side_length
+    dec_max = dec_min + side_length
+    # convention for defining box corners: [[dec_min, ra_max],[dec_max, ra_min]]
+    box = np.array([[dec_min, ra_max],[dec_max, ra_min]]) * utils.degree 
+    shape, wcs = enmap.geometry(pos=box, res=pix_scale * utils.arcmin,
+        proj='car')
 
-    return catalog
+    # create a mask that keeps the whole area
+    boxmask = enmap.ones(shape, wcs=wcs)
 
-def setup_maps():
+    # while we're here, let's make the base flat_map
+    nX = int(sizeX * 60. / pix_scale)
+    nY = int(sizeY * 60. / pix_scale)
+    basemap = FlatMap(nX=nX, nY=nY, sizeX=side_length*np.pi/180.,
+        sizeY=side_length*np.pi/180.)
 
-    return lpf_map, hpf_map
+    return shape, wcs, boxmask, basemap
 
-def run_thumbstack():
+def setup_maps(lpf_path, hpf_path, side_length=10., ra_min=200.,
+    dec_min=10., pix_scale=0.5):
+    """Thumbstack needs the input maps as enmaps
+    """
+    shape, wcs, boxmask, basemap = make_box(
+        side_length, ra_min, dec_min, pix_scale) 
+    lpf_map = basemap.read(lpf_path)
+    hpf_map = basemap.read(hpf_path)
+
+    assert lpf_map.data.shape == shape
+    assert hpf_map.data.shape == shape
+    lpf_enmap = enmap.enmap(lpf_map.data, wcs=wcs)
+    hpf_enmap = enmap.enmap(hpf_map.data, wcs=wcs)
+
+    return lpf_enmap, hpf_enmap, boxmask
 
 def main(argv):
     args = parse_args()
     
-    initialize()
+    u, massConv = initialize()
+    galcat = Catalog(u, massConv, name=args.catname,
+        pathInCatalog=args.catpath, workDir=args.workdir)
 
+    lpf_enmap, hpf_enmap, boxmask = setup_maps(
+        args.lpfpath,
+        args.hpfpath,
+        args.side_length,
+        args.ra_min,
+        args.dec_min,
+        args.pix_scale
+    )
+
+    # run thumbstack
+    ts = Thumbstack(
+        u,
+        galcat,
+        hpf_enmap,
+        boxmask,
+        cmbHit=None,
+        cmbMap2=lpf_enmap,
+        name=args.tsname,
+        save=True,
+        nProc=1,
+        filterTypes=args.filtertype,
+        estimatorTypes=args.esttype,
+        doBootstrap=args.dobootstrap,
+        workDir=args.workdir,
+        runEndToEnd=True
+    )
 
 if __name__ == '__main__':
     main(sys.argv)
