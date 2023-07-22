@@ -13,10 +13,18 @@ import cmb
 from cmb import *
 # load catalogs
 # 7642 entries over [200<RA<210, 10<DEC<20]
-# catpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10x10_randradec_v2/catalog.txt'
+catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_v2/catalog.txt'
+randcatpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_randradec_v2/catalog.txt'
+catname = 'cmass_m_10x10_sig5'
+randname = '%s_randradec'%catname
 
 # 10k entries, CMASS positions over [200<RA<211.5, 10<DEC<21.4]
-catpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10kgal/cmass_m_10kgal_catalog.txt'
+# catpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10kgal/cmass_m_10kgal_catalog.txt'
+# 10k entries, RADEC randomized over [200<RA<210, 10<DEC<20]
+# randcatpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10kgal_randradec/catalog.txt'
+# catname='cmass_m_10kgal_sig5'
+# randname = '%s_randradec'%catname
+
 
 # set up cosmology and mass conversion for catalog
 u = Universe() # MarianaUniv() had a weird bug not inheriting Universe class attributes
@@ -33,18 +41,15 @@ massConversion = MassConversionKravtsov14()
 cmass10x10 = Catalog(
     u,
     massConversion,
-    name='cmass_m_10kgal_sig5',
+    name=catname,
     pathInCatalog=catpath,
     save=True
 )
 
-# 10k entries, RADEC randomized over [200<RA<210, 10<DEC<20]
-randcatpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10kgal_randradec/catalog.txt'
-
 cmass10x10rand = Catalog(
     u,
     massConversion,
-    name='cmass_m_10kgal_sig5_randradec',
+    name=randname,
     pathInCatalog=randcatpath,
     save=True
 )
@@ -56,16 +61,15 @@ print('Mean tau: ', mean_tau)
 # Generate empty square map, then make a mock map
 # Generate an empty square map with RA in [200., 210.] and DEC in [10., 20.]
 # convention for defining box corners is [[dec_min, ra_max],[dec_max, ra_min]]
-# side_length = 10.
-side_length = 11.4
+side_length = 10.
+# side_length = 11.4
 ra_min = 200.
 ra_max = ra_min + side_length
 dec_min = 10.
 dec_max = dec_min + side_length
 
 box = np.array([[dec_min, ra_max],[dec_max, ra_min]]) * utils.degree
-#box = np.array([[-5., 0.], [0., 5.]]) * utils.degree
-resArcmin = 0.5 #1. #0.5  # 0.1   # map pixel size [arcmin]
+resArcmin = 0.5 # map pixel size [arcmin]
 shape,wcs = enmap.geometry(pos=box, res=resArcmin * utils.arcmin, proj='car')
 
 # create a mask that keeps the whole area

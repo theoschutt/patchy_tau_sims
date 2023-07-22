@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""run_thumbstack.py: Run thumbstack on a given set of filtered
-maps.
+"""run_thumbstack.py: Run thumbstack on a given set of filtered maps.
 """
 import os, sys
-sys.path.append('../ThumbStack')
-# from flat_map import FlatMap
+sys.path.append('../../ThumbStack')
 import numpy as np
 import fitsio
 from scipy.special import erf
@@ -13,15 +11,33 @@ from functools import partial
 import flat_map
 from flat_map import *
 
+import universe
+from universe import UnivMariana
+
+import catalog
+from catalog import *
+
+import mass_conversion
+from mass_conversion import *
+
+from catalog import *
+
+from thumbstack import *
+
+import pixell
+
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser(
         description='Run thumbstack on a given set of filtered maps.')
     parser.add_argument('--workdir',
         default='/home/theo/Documents/research/CMB/patchy_tau_sims',
-        help='Full path to the LPF flatmap FITS file')
+        help='parent directory of input/output/figures directories')
     parser.add_argument('--lpfpath',
         help='Full path to the LPF flatmap FITS file')
+    parser.add_argument('--test',
+        default=False, action='store_const', const=True,
+        help='Test script using first 10 objects in catalog')
     parser.add_argument('--hpfpath',
         help='Full path to the HPF flatmap FITS file')
     parser.add_argument('--catpath',
@@ -44,14 +60,17 @@ def parse_args():
         help='Name for thumbstack output files')
     parser.add_argument('--filtertype',
         default='tauring',
-        help='Choose thumbstack filter (can be string or list of strings)'
+        help='Choose thumbstack filter (can be string or list of strings)')
     parser.add_argument('--esttype',
         default=['tau_ti_uniformweight', 'tau_sgn_uniformweight'],
         help=('Choose thumbstack estimator and weight'
-              ' (can be string or list of strings)')
+              ' (can be string or list of strings)'))
     parser.add_argument('--dobootstrap',
         default=True,
         help='Boolean whether to compute bootstrap covariance')
+    parser.add_argument('--dostackmap',
+        default=False,
+        help='Boolean whether to compute stacked map')
     parser.add_argument('--outpath',
         help='Path to directory to save output files')
  
@@ -94,8 +113,8 @@ def make_box(side_length=10., ra_min=200., dec_min=10., pix_scale=0.5):
     boxmask = enmap.ones(shape, wcs=wcs)
 
     # while we're here, let's make the base flat_map
-    nX = int(sizeX * 60. / pix_scale)
-    nY = int(sizeY * 60. / pix_scale)
+    nX = int(side_length * 60. / pix_scale)
+    nY = int(side_length * 60. / pix_scale)
     basemap = FlatMap(nX=nX, nY=nY, sizeX=side_length*np.pi/180.,
         sizeY=side_length*np.pi/180.)
 
@@ -106,9 +125,11 @@ def setup_maps(lpf_path, hpf_path, side_length=10., ra_min=200.,
     """Thumbstack needs the input maps as enmaps
     """
     shape, wcs, boxmask, basemap = make_box(
-        side_length, ra_min, dec_min, pix_scale) 
-    lpf_map = basemap.read(lpf_path)
-    hpf_map = basemap.read(hpf_path)
+        side_length, ra_min, dec_min, pix_scale)
+    lpf_map = basemap.copy() # flatMap loads in place
+    hpf_map = basemap.copy()
+    lpf_map.read(lpf_path)
+    hpf_map.read(hpf_path)
 
     assert lpf_map.data.shape == shape
     assert hpf_map.data.shape == shape
@@ -121,7 +142,17 @@ def main(argv):
     args = parse_args()
     
     u, massConv = initialize()
-    galcat = Catalog(u, massConv, name=args.catname,
+
+    if args.test:
+        nObj = 10
+        do_bootstrap = False
+        do_stacked_map = True
+    else:
+        nObj = None
+        do_stacked_map = args.dostackmap
+        do_bootstrap = args.dobootstrap
+
+    galcat = Catalog(u, massConv, name=args.catname, nObj=nObj,
         pathInCatalog=args.catpath, workDir=args.workdir)
 
     lpf_enmap, hpf_enmap, boxmask = setup_maps(
@@ -134,7 +165,7 @@ def main(argv):
     )
 
     # run thumbstack
-    ts = Thumbstack(
+    ts = ThumbStack(
         u,
         galcat,
         hpf_enmap,
@@ -146,9 +177,11 @@ def main(argv):
         nProc=1,
         filterTypes=args.filtertype,
         estimatorTypes=args.esttype,
-        doBootstrap=args.dobootstrap,
+        doBootstrap=do_bootstrap,
         workDir=args.workdir,
-        runEndToEnd=True
+        runEndToEnd=True,
+        test=args.test,
+        doStackedMap=do_stacked_map
     )
 
 if __name__ == '__main__':

@@ -4,7 +4,7 @@ If used as main, expects as CLI args fits file name (including path),
 output file name prefix, and path to save directory.
 """
 import os, sys
-sys.path.append('../ThumbStack')
+sys.path.append('../../ThumbStack')
 # from flat_map import FlatMap
 import numpy as np
 import fitsio
@@ -16,16 +16,30 @@ from flat_map import *
 
 def parse_args():
     import argparse
-    parser = argparse.ArgumentParser(description='Apply beam and LPF/HPF to a flatmap file.')
-    
-    parser.add_argument('--flatmap',
+    parser = argparse.ArgumentParser(description='Apply beam and LPF/HPF to a flatmap or image file.')
+    parser.add_argument('--image_fits',
+                        default=None,
+                        help='Full Path to the unfiltered image FITS file')
+    parser.add_argument('--flatmap_fits',
+                        default=None,
                         help='Full Path to the unfiltered flatmap FITS file')
-    parser.add_argument('--renorm', default=0.000245, # from Will's fit
+    parser.add_argument('--flatmap_name',
+                        default='test',
+                        help='Name stem for the flatmap to be made from the image FITS')
+    parser.add_argument('--renorm',
+                        default=None, #0.000245, # from Will's fit
                         help='target peak value for the tau Gaussian profile (before applying beam)')
-    parser.add_argument('--tau_fwhm', default=5., # from Will's fit
-                        help='tau Gaussian profile FWHM in arcmin used to make unfiltered tau map (before applying beam)')    
+    parser.add_argument('--sub_const',
+                        default=None, type=float,
+                        help='Constant to subtract from the entire map (before applying beam). For pure tau maps.')
+    parser.add_argument('--tau_fwhm',
+                        default=5., # from Will's fit
+                        help='tau Gaussian profile FWHM in arcmin that used to make unfiltered tau map (before applying beam)')
     parser.add_argument('--outpath',
                         help='path to directory to save output files')
+    parser.add_argument('--save_image', default=True,
+                        action='store_const', const=True,
+                        help='in addition to flatmaps, save image fits files')
     parser.add_argument('--beam_fwhm', default=1.6,
                         help='FWHM in arcmin of beam to apply to map')
     parser.add_argument('--filter_type', default='theo',
@@ -36,7 +50,7 @@ def parse_args():
                         help='HPF center location for erf function filtering (i.e. `theo` filter_type)')
     parser.add_argument('--filter_width', default=100.,
                         help='LPF/HPF filter width for erf function filtering (i.e. `theo` filter_type)')
-    
+
     args = parser.parse_args()
 
     return args
@@ -53,13 +67,14 @@ def low_pass(ell, loc=1000, width=100.):
     half_width = width/2
     return -1 * erf(np.sqrt(2)/half_width*(ell-loc))/2 + 0.5
 
+# FIXME: add the 0 and 1 regions
 def hpf_will(ell):
     return np.sin((ell - 2350) * np.pi / 300.)
 
 def lpf_will(ell):
     return np.cos((ell - 2000) * np.pi / 300.)
 
-def make_basemap(sizeX=11.4, sizeY=11.4, pixel_scale=0.5):
+def make_basemap(sizeX=10., sizeY=10., pixel_scale=0.5):
     # sizeX, sizeY: map dimensions in degrees
 
     # number of pixels for the flat map
@@ -68,42 +83,66 @@ def make_basemap(sizeX=11.4, sizeY=11.4, pixel_scale=0.5):
 
     # basic map object
     baseMap = FlatMap(nX=nX, nY=nY, sizeX=sizeX*np.pi/180., sizeY=sizeY*np.pi/180.)
-    
+
     return baseMap
 
-def renorm_image(image_data, target_peak=0.000245, tau_fwhm=5.0):
+def renorm_map(flatmap, target_peak=0.000245, tau_fwhm=5.0):
     # default profile_fwhm and target_peak from Will's best fit
+    renormmap = flatmap.copy()
     sigma = tau_fwhm / np.sqrt(8.*np.log(2))
     gauss_norm = 1. / 2. / np.pi / sigma**2
     norm = target_peak / gauss_norm
-    return norm * image_data
+    renormmap.data *= norm
+    flatmap.name += '_renorm%.2e'%renorm
+    return flatmap
 
-def make_flatmap(image_fits, renorm=None, tau_fwhm=5.0):
-    print('Creating flatmap from image file:', image_fits)
+def subtract_const(flatmap, const):
+    # default profile_fwhm and target_peak from Will's best fit
+    constmap = flatmap.copy()
+    constmap.data = flatmap.data - const * np.ones_like(flatmap.data)
+    constmap.dataFourier = constmap.fourier(constmap.data)
+    constmap.name += '_-%s'%str(const)
+    return constmap
+
+def make_const_map(flatmap, const):
+    # need constant map for T_large for pure tau measurement
+    # normal LPF removes the mean over the map, which is usually
+    # zero anyway, but for the signal-only maps, is nonzero.
+    constmap = flatmap.copy()
+    constmap.data = - const * np.ones_like(flatmap.data)
+    constmap.dataFourier = constmap.fourier(constmap.data)
+    constmap.name += '_CONST%s'%str(const)
+    return constmap
+
+def load_flatmap(flatmap_fits):
+    print('Loading flatmap file:', flatmap_fits)
     flatmap = make_basemap()
-    flatmap.read(image_fits)
-    print(flatmap.name)
-    flatmap.name = '10kgal_gauss_peak1'
-    print(flatmap.name)
-    if renorm is not None:
-        renormed_image = renorm_image(flatmap.data, target_peak=renorm, tau_fwhm=tau_fwhm)
-        flatmap.data = renormed_image
-        flatmap.name += '_renorm%.2e'%renorm
+    flatmap.read(flatmap_fits)
+    return flatmap
+
+def make_flatmap(image_fits, name='test'):
+    print('Creating flatmap with name %s from image file:'%name, image_fits)
+    flatmap = make_basemap()
+    image_data = fitsio.read(image_fits)
+    flatmap.data = image_data
+    flatmap.dataFourier = flatmap.fourier(image_data)
+    flatmap.name = name
     return flatmap
 
 def apply_beam(flatmap, fwhm=1.6):
     print('Applying beam with FWHM=%s arcmin.'%str(fwhm))
     # convert fwhm from arcmin to radians
+    beamedmap = flatmap.copy()
     fwhm_rad = fwhm * np.pi / 180. / 60.
     # v1
     beamfn = partial(fbeam, real_fwhm=fwhm_rad)
-    flatmap.dataFourier = flatmap.filterFourierIsotropic(fW=beamfn)
+    beamedmap.dataFourier = beamedmap.filterFourierIsotropic(fW=beamfn)
     # v2
     # flatmap.dataFourier *= fbeam(flatmap.l, fwhm_rad)
-    flatmap.data = flatmap.inverseFourier()
-    flatmap.name += '_beam%s'%str(fwhm)
+    beamedmap.data = beamedmap.inverseFourier()
+    beamedmap.name += '_beam%s'%str(fwhm)
     
-    return flatmap
+    return beamedmap
 
 def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, width=100.):
     if filter_type == 'theo':
@@ -140,7 +179,7 @@ def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, wid
     
     return lpf_map, hpf_map
 
-def save_flatmap(flatmap, path=None, save_diagnostics=True):
+def save_flatmap(flatmap, path=None, save_image=True, save_diagnostics=True):
     if save_diagnostics:
         ell_max = np.max(flatmap.l.flatten())
         ps_path = os.path.join(path, '%s_powspec.png'%flatmap.name)
@@ -153,20 +192,50 @@ def save_flatmap(flatmap, path=None, save_diagnostics=True):
     fm_path = os.path.join(path, '%s_flatmap.fits'%flatmap.name)
     print('Saving flatmap:', fm_path)
     flatmap.write(fm_path)
+    im_path = os.path.join(path, '%s_image.fits'%flatmap.name)
+    if save_image:
+        fitsio.write(im_path, flatmap.data)
 
 def main(argv):
     args = parse_args()
     
-    flatmap = make_flatmap(args.flatmap, args.renorm, args.tau_fwhm)
-    save_flatmap(flatmap, path=args.outpath)
+    if not os.path.exists(args.outpath):
+        os.makedirs(args.outpath)
+
+    # Write text file logging what command line args were used
+    log_fn = os.path.join(args.outpath, 'args_%s.log'%args.flatmap_name)
+    print('Writing argument log file:', log_fn)
+    arg_dict = vars(args)
+    with open(log_fn, 'w') as f:
+        for arg in arg_dict:
+            f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
     
+    if args.flatmap_fits is not None:
+        flatmap = load_flatmap(args.flatmap_fits)
+    elif args.image_fits is not None:
+        flatmap = make_flatmap(args.image_fits, name=args.flatmap_name)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+    else:
+        raise ValueError('Must specify an input image or flatmap FITS file.')
+
+    if args.renorm is not None:
+        flatmap = renorm_image(
+            flatmap, target_peak=args.renorm, tau_fwhm=args.tau_fwhm)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+
+    if args.sub_const is not None:
+        flatmap = subtract_const(flatmap, args.sub_const)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+        constmap = make_const_map(flatmap, args.sub_const)
+        save_flatmap(constmap, path=args.outpath, save_image=args.save_image)
+
     beamed_map = apply_beam(flatmap, fwhm=args.beam_fwhm)
-    save_flatmap(beamed_map, path=args.outpath)
+    save_flatmap(beamed_map, path=args.outpath, save_image=args.save_image)
     
     lpf_map, hpf_map = apply_filtering(beamed_map, args.filter_type, args.lpf_loc,
                                        args.hpf_loc, args.filter_width)
-    save_flatmap(lpf_map, path=args.outpath)
-    save_flatmap(hpf_map, path=args.outpath)
+    save_flatmap(lpf_map, path=args.outpath, save_image=args.save_image)
+    save_flatmap(hpf_map, path=args.outpath, save_image=args.save_image)
 
 
 if __name__ == '__main__':
