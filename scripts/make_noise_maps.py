@@ -1,12 +1,73 @@
 import os, sys
-sys.path.append('../ThumbStack')
-sys.path.append('../LensQuEst')
+sys.path.append('../../ThumbStack')
+sys.path.append('../../LensQuEst')
 import numpy as np
-import flat_map
+#import flat_map
 from flat_map import FlatMap
 from pn_2d import interp1d
 from cmb import StageIVCMB
-from filter_map import apply_filtering_and_save
+#from filter_map import apply_filtering_and_save
+
+def parse_args():
+    import argparse
+    parser = argparse.ArgumentParser(description='Create map from noise curve or expt parameters.')
+    parser.add_argument(
+        '--noise_curve_file',
+        default=None,
+        help='Full Path to the input noise curve data file'
+    )
+    parser.add_argument(
+        '--experiment',
+        default='s4',
+        help='choice of experiment. Sets parameters such as noise, beam, filename tags'
+    )
+    parser.add_argument(
+        '--name',
+        default='test',
+        help='name stem for the flatmap to be made'
+    )
+    parser.add_argument(
+        '--outpath',
+        default='../output/noise_maps/',
+        help='output path where head directory (named --name) will be created'
+    )
+    parser.add_argument(
+        '--map_side_length',
+        default=10., type=float,
+        help='side length of map in degrees. Will make a square map.'
+    )
+    parser.add_argument(
+        '--pixel_scale',
+        default=0.5,
+        help='pixel scale of map in arcmin'
+    )
+    parser.add_argument(
+        '--ell_min',
+        default=40.,
+        help='minimum ell to be used in creating the power spectrum to generate the map'
+    )
+    parser.add_argument(
+        '--ell_max',
+        default=40.,
+        help='minimum ell to be used in creating the power spectrum to generate the map'
+    )
+    parser.add_argument('--save_image', default=True,
+                        action='store_const', const=True,
+                        help='in addition to flatmaps, save image fits files')
+    parser.add_argument('--beam_fwhm', default=1.6,
+                        help='FWHM in arcmin of beam to apply to map')
+    parser.add_argument('--filter_type', default='theo',
+                        help='Choose lpf/hpf functions (`theo` or `will`')
+    parser.add_argument('--lpf_loc', default=1000,
+                        help='LPF center location for erf function filtering (i.e. `theo` filter_type)')
+    parser.add_argument('--hpf_loc', default=1500,
+                        help='HPF center location for erf function filtering (i.e. `theo` filter_type)')
+    parser.add_argument('--filter_width', default=100.,
+                        help='LPF/HPF filter width for erf function filtering (i.e. `theo` filter_type)')
+
+    args = parser.parse_args()
+
+    return args
 
 def make_map(sizeX=11.4, sizeY=11.4, pixel_scale=0.5):
     # map dimensions in degrees
@@ -35,7 +96,7 @@ def make_cmb(lMin=30., lMax=2.5e4, nBins=150, beam=1., noise=1.):
     #     beam: 1.3'
     #     noise: 10 uK*arcmin
     # AdvACT specs:
-    #     beam: 1.4'
+    #     beam: 1.4' update: 1.6'
     #     noise: 15 uK*arcmin
     cmb = StageIVCMB(beam=beam, noise=noise, lMin=lMin, lMaxT=lMax, lMaxP=lMax, atm=False)
     
@@ -114,6 +175,15 @@ def gen_and_save_maps_from_file(file, name):
     ncurve = np.genfromtxt(file)
     ell = ncurve[:,0]
     f = ncurve[:,1]
+    nmap = gen_map_from_curve(ell, f, cmb, fm, name)
+    save_map(nmap, cmb, 'output/cmb_maps/10kgal_noise_maps/', name)
+
+def gen_and_save_maps_from_npz(npz, name):
+    cmb = make_cmb(beam=1.6)
+    fm = make_map()
+    dat = np.load(npz)
+    ell = dat['ells']
+    f = dat['cl_tt']
     nmap = gen_map_from_curve(ell, f, cmb, fm, name)
     save_map(nmap, cmb, 'output/cmb_maps/10kgal_noise_maps/', name)
 
@@ -196,3 +266,8 @@ def make_s4_noise_maps(path='output/cmb_maps/10kgal_noise_maps/s4_l30-25k_v3'):
         # and then make and save filtered versions of the map
         apply_filtering_and_save(fm_path, lpf_loc=1000, hpf_loc=1500,
             half_width=50., path=this_cmb_path, save_diagnostics=True)
+
+def main(argv):
+    args = parse_args()
+
+    

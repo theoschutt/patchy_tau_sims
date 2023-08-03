@@ -5,14 +5,12 @@ output file name prefix, and path to save directory.
 """
 import os, sys
 sys.path.append('../../ThumbStack')
-# from flat_map import FlatMap
 import numpy as np
 import fitsio
 from scipy.special import erf
 from functools import partial
 
-import flat_map
-from flat_map import *
+from flat_map import FlatMap
 
 def parse_args():
     import argparse
@@ -34,21 +32,30 @@ def parse_args():
                         help='Constant to subtract from the entire map (before applying beam). For pure tau maps.')
     parser.add_argument('--tau_fwhm',
                         default=5., # from Will's fit
+                        type=float,
                         help='tau Gaussian profile FWHM in arcmin that used to make unfiltered tau map (before applying beam)')
     parser.add_argument('--outpath',
                         help='path to directory to save output files')
     parser.add_argument('--save_image', default=True,
                         action='store_const', const=True,
                         help='in addition to flatmaps, save image fits files')
-    parser.add_argument('--beam_fwhm', default=1.6,
+    parser.add_argument('--beam_fwhm',
+                        default=None,
+                        type=float,
                         help='FWHM in arcmin of beam to apply to map')
     parser.add_argument('--filter_type', default='theo',
                         help='Choose lpf/hpf functions (`theo` or `will`')
-    parser.add_argument('--lpf_loc', default=1000,
+    parser.add_argument('--lpf_loc',
+                        default=1000,
+                        type=int,
                         help='LPF center location for erf function filtering (i.e. `theo` filter_type)')
-    parser.add_argument('--hpf_loc', default=1500,
+    parser.add_argument('--hpf_loc',
+                        default=1500,
+                        type=int,
                         help='HPF center location for erf function filtering (i.e. `theo` filter_type)')
-    parser.add_argument('--filter_width', default=100.,
+    parser.add_argument('--filter_width',
+                        default=100.,
+                        type=float,
                         help='LPF/HPF filter width for erf function filtering (i.e. `theo` filter_type)')
 
     args = parser.parse_args()
@@ -67,12 +74,27 @@ def low_pass(ell, loc=1000, width=100.):
     half_width = width/2
     return -1 * erf(np.sqrt(2)/half_width*(ell-loc))/2 + 0.5
 
-# FIXME: add the 0 and 1 regions
 def hpf_will(ell):
-    return np.sin((ell - 2350) * np.pi / 300.)
+    # do piecewise filtering
+    low_ell = ell[ell<2350]
+    mid_ell = ell[np.logical_and(2350<ell, ell<2500)]
+    hi_ell = ell[ell>2500]
+    low_filt = np.zeros_like(low_ell)
+    mid_filt = np.sin((mid_ell-2350) * np.pi/300.)
+    hi_filt = np.ones_like(hi_ell)
+    tot_filt = np.concatenate([low_filt, mid_filt, hi_filt])
+    return tot_filt
 
 def lpf_will(ell):
-    return np.cos((ell - 2000) * np.pi / 300.)
+    # do piecewise filtering
+    low_ell = ell[ell<2000]
+    mid_ell = ell[np.logical_and(2000<ell, ell<2150)]
+    hi_ell = ell[ell>2150]
+    low_filt = np.ones_like(low_ell)
+    mid_filt = np.cos((mid_ell-2000) * np.pi/300.)
+    hi_filt = np.zeros_like(hi_ell)
+    tot_filt = np.concatenate([low_filt, mid_filt, hi_filt])
+    return tot_filt
 
 def make_basemap(sizeX=10., sizeY=10., pixel_scale=0.5):
     # sizeX, sizeY: map dimensions in degrees
@@ -93,15 +115,16 @@ def renorm_map(flatmap, target_peak=0.000245, tau_fwhm=5.0):
     gauss_norm = 1. / 2. / np.pi / sigma**2
     norm = target_peak / gauss_norm
     renormmap.data *= norm
-    flatmap.name += '_renorm%.2e'%renorm
-    return flatmap
+    renormmap.name += '_renorm%.2e'%renorm
+    return renormmap
 
 def subtract_const(flatmap, const):
-    # default profile_fwhm and target_peak from Will's best fit
+    """Create constant map with tau profiles added.
+    For tau signal map only."""
     constmap = flatmap.copy()
-    constmap.data = flatmap.data - const * np.ones_like(flatmap.data)
+    constmap.data = - const * (np.ones_like(flatmap.data) - flatmap.data)
     constmap.dataFourier = constmap.fourier(constmap.data)
-    constmap.name += '_-%s'%str(const)
+    constmap.name += '_c-%s'%str(const)
     return constmap
 
 def make_const_map(flatmap, const):
@@ -129,16 +152,13 @@ def make_flatmap(image_fits, name='test'):
     flatmap.name = name
     return flatmap
 
-def apply_beam(flatmap, fwhm=1.6):
+def apply_beam(flatmap, fwhm):
     print('Applying beam with FWHM=%s arcmin.'%str(fwhm))
     # convert fwhm from arcmin to radians
     beamedmap = flatmap.copy()
     fwhm_rad = fwhm * np.pi / 180. / 60.
-    # v1
     beamfn = partial(fbeam, real_fwhm=fwhm_rad)
     beamedmap.dataFourier = beamedmap.filterFourierIsotropic(fW=beamfn)
-    # v2
-    # flatmap.dataFourier *= fbeam(flatmap.l, fwhm_rad)
     beamedmap.data = beamedmap.inverseFourier()
     beamedmap.name += '_beam%s'%str(fwhm)
     
@@ -174,8 +194,8 @@ def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, wid
         lpf_map.name += '_lpf%it'%lpf_loc
         hpf_map.name += '_hpf%it'%hpf_loc
     elif filter_type == 'will':
-        lpf_map.name += '_lpf2000w'
-        hpf_map.name += '_hpf2350w'
+        lpf_map.name += '_lpf2075w'
+        hpf_map.name += '_hpf2425w'
     
     return lpf_map, hpf_map
 
@@ -229,10 +249,11 @@ def main(argv):
         constmap = make_const_map(flatmap, args.sub_const)
         save_flatmap(constmap, path=args.outpath, save_image=args.save_image)
 
-    beamed_map = apply_beam(flatmap, fwhm=args.beam_fwhm)
-    save_flatmap(beamed_map, path=args.outpath, save_image=args.save_image)
+    if args.beam_fwhm is not None:
+        flatmap = apply_beam(flatmap, fwhm=args.beam_fwhm)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
     
-    lpf_map, hpf_map = apply_filtering(beamed_map, args.filter_type, args.lpf_loc,
+    lpf_map, hpf_map = apply_filtering(flatmap, args.filter_type, args.lpf_loc,
                                        args.hpf_loc, args.filter_width)
     save_flatmap(lpf_map, path=args.outpath, save_image=args.save_image)
     save_flatmap(hpf_map, path=args.outpath, save_image=args.save_image)

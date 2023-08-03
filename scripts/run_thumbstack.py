@@ -2,29 +2,18 @@
 """run_thumbstack.py: Run thumbstack on a given set of filtered maps.
 """
 import os, sys
-sys.path.append('../../ThumbStack')
 import numpy as np
 import fitsio
 from scipy.special import erf
 from functools import partial
 
-import flat_map
-from flat_map import *
-
-import universe
+sys.path.append('../../ThumbStack')
+from headers import *
+from flat_map import FlatMap
 from universe import UnivMariana
-
-import catalog
-from catalog import *
-
-import mass_conversion
-from mass_conversion import *
-
-from catalog import *
-
-from thumbstack import *
-
-import pixell
+from catalog import Catalog
+from mass_conversion import MassConversionKravtsov14
+from thumbstack import ThumbStack
 
 def parse_args():
     import argparse
@@ -44,9 +33,11 @@ def parse_args():
         help='Full path to input catalog file')
     parser.add_argument('--pix_scale',
         default=0.5,
+        type=float,
         help='Pixel scale in arcmin/px')
     parser.add_argument('--side_length',
         default=10.,
+        type=float,
         help='Name of catalog (used in path)')
     parser.add_argument('--ra_min',
         default=200.,
@@ -140,7 +131,18 @@ def setup_maps(lpf_path, hpf_path, side_length=10., ra_min=200.,
 
 def main(argv):
     args = parse_args()
-    
+
+    # Write text file logging what command line args were used
+    outpath = os.path.join(args.workdir, "output/thumbstack/"+args.tsname)
+    if not os.path.exists(outpath):
+       os.makedirs(outpath)
+    log_fn = os.path.join(outpath, '%s_args.log'%args.tsname)
+    print('Writing argument log file:', log_fn)
+    arg_dict = vars(args)
+    with open(log_fn, 'w') as f:
+        for arg in arg_dict:
+            f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
+
     u, massConv = initialize()
 
     if args.test:

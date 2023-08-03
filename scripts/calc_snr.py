@@ -44,7 +44,7 @@ def calc_snr_expt(snr_per_object, n_gal_dict, print_snr=True):
 
     if print_snr:
         for gal_survey, snr in zip(n_gal_dict, snr_expt_list):
-            print(gal_survey, n_gal_dict[gal_survey], '%.3f'%snr)
+            print(gal_survey, n_gal_dict[gal_survey], '--->', '%.3f'%snr)
     return snr_expt_list
 
 def print_snr_table():
@@ -68,6 +68,8 @@ def main():
         'DESI LRGs Y5': 3010000,
         'DESI LRGs+Ext. LRGs Y5': 11395000,
         'unWISE': 50750600,
+        'unWISE blue': 3.8e7,
+        'unWISE green': 2.1e7,
         'DES (approx)': 100000000,
         'LSST': 1624320000
     }
