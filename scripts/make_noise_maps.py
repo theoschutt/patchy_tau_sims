@@ -2,6 +2,7 @@ import os, sys
 sys.path.append('../../ThumbStack')
 sys.path.append('../../LensQuEst')
 import numpy as np
+import fitsio
 #import flat_map
 from flat_map import FlatMap
 from pn_2d import interp1d
@@ -48,12 +49,16 @@ def parse_args():
     )
     parser.add_argument(
         '--ell_max',
-        default=40.,
+        default=10000.,
         help='minimum ell to be used in creating the power spectrum to generate the map'
     )
-    parser.add_argument('--save_image', default=True,
-                        action='store_const', const=True,
-                        help='in addition to flatmaps, save image fits files')
+    parser.add_argument(
+        '--save_image',
+        default=True,
+        action='store_const',
+        const=True,
+        help='in addition to flatmaps, save image fits files'
+    )
     parser.add_argument('--beam_fwhm', default=1.6,
                         help='FWHM in arcmin of beam to apply to map')
     parser.add_argument('--filter_type', default='theo',
@@ -69,7 +74,7 @@ def parse_args():
 
     return args
 
-def make_map(sizeX=11.4, sizeY=11.4, pixel_scale=0.5):
+def make_map(sizeX=10., sizeY=10., pixel_scale=0.5):
     # map dimensions in degrees
 
     # number of pixels for the flat map, let's do 0.5' pixels
@@ -81,7 +86,7 @@ def make_map(sizeX=11.4, sizeY=11.4, pixel_scale=0.5):
     
     return baseMap
 
-def make_cmb(lMin=30., lMax=2.5e4, nBins=150, beam=1., noise=1.):
+def make_cmb(lMin=30., lMax=10000., nBins=150, beam=1., noise=1.):
     # Adjust the lMin and lMax to the assumptions of the analysis.
     # multipoles to include in the lensing reconstruction
     # lMin = 30.; lMax = 2.5e4
@@ -102,7 +107,21 @@ def make_cmb(lMin=30., lMax=2.5e4, nBins=150, beam=1., noise=1.):
     
     return cmb
 
-def gen_map_from_fn(powspec_fn, cmb, flat_map, seed=42):
+def gen_cmb_fg_map(fg_fits, name, type='add'):
+    basemap = make_map(10., 10., 0.5)
+    cmb = make_cmb(beam=1.6)
+    dat = fitsio.read(fg_fits)
+    forCtot = lambda l: cmb.funlensedTT(l) * cmb.fbeam(l)**2
+    cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
+    if type == 'mult':
+        cmbmap.data *= dat
+    elif type == 'add':
+        cmbmap.data += dat
+    cmbmap.dataFourier = cmbmap.fourier(cmbmap.data)
+
+    return cmbmap
+
+def gen_map_from_fn(powspec_fn, cmb, flat_map, name, lMin=30., lMax=10000., seed=42):
     print('Generating map')
     # reinterpolate: gain factor 10 in speed
     L = np.logspace(np.log10(lMin/2.), np.log10(2.*lMax), 1001, 10.)
@@ -166,37 +185,37 @@ def save_map(flatmap, cmb, path, name):
     flatmap.write(fm_path)
 
     # and then make and save filtered versions of the map
-    apply_filtering_and_save(fm_path, lpf_loc=1000, hpf_loc=1500,
-        half_width=50., path=this_cmb_path, save_diagnostics=True)
+    # apply_filtering_and_save(fm_path, lpf_loc=1000, hpf_loc=1500,
+    #     half_width=50., path=this_cmb_path, save_diagnostics=True)
 
-def gen_and_save_maps_from_file(file, name):
+def gen_and_save_maps_from_file(file, name, path='output/cmb_maps/10x10_noise_maps'):
     cmb = make_cmb()
     fm = make_map()
     ncurve = np.genfromtxt(file)
     ell = ncurve[:,0]
     f = ncurve[:,1]
     nmap = gen_map_from_curve(ell, f, cmb, fm, name)
-    save_map(nmap, cmb, 'output/cmb_maps/10kgal_noise_maps/', name)
+    save_map(nmap, cmb, path, name)
 
-def gen_and_save_maps_from_npz(npz, name):
+def gen_and_save_maps_from_npz(npz, name='advACT_nilc', path='output/cmb_maps/10x10_noise_maps'):
     cmb = make_cmb(beam=1.6)
     fm = make_map()
     dat = np.load(npz)
     ell = dat['ells']
     f = dat['cl_tt']
     nmap = gen_map_from_curve(ell, f, cmb, fm, name)
-    save_map(nmap, cmb, 'output/cmb_maps/10kgal_noise_maps/', name)
+    save_map(nmap, cmb, path, name)
 
-def gen_and_save_spt_maps(file, name='spt_2023ilc'):
+def gen_and_save_spt_maps(file, name='spt_2023ilc', path='output/cmb_maps/10x10_noise_maps/'):
     cmb = make_cmb(beam=1.2)
     fm = make_map()
     sptdict = np.load(file, allow_pickle = 1, encoding = 'latin1').item()
     ell = sptdict['el']
     f = sptdict['cl_residual']['TT']
     nmap = gen_map_from_curve(ell, f, cmb, fm, name)
-    save_map(nmap, cmb, 'output/cmb_maps/10kgal_noise_maps/', name)
+    save_map(nmap, cmb, path, name)
 
-def make_s4_noise_maps(path='output/cmb_maps/10kgal_noise_maps/s4_l30-25k_v3'):
+def make_s4_noise_maps(path='output/cmb_maps/10x10_noise_maps/s4_l30-10k_v1'):
 
     # specs and file paths for 10kgal-related maps
     # path = 'output/cmb_maps/10kgal_noise_maps/s4_l30-25k_v2'
@@ -224,7 +243,7 @@ def make_s4_noise_maps(path='output/cmb_maps/10kgal_noise_maps/s4_l30-25k_v3'):
     ps_list = [forCtotal_1, forCtotal_2, forCtotal_3, forCtotal_4, forCtotal_5]
 
     lMin = 30.
-    lMax = 25000.
+    lMax = 10000.
 
     # interpolate power spectrum and make map
     for forCtotal, name in zip(ps_list, cmb_names):
@@ -264,10 +283,9 @@ def make_s4_noise_maps(path='output/cmb_maps/10kgal_noise_maps/s4_l30-25k_v3'):
         this_cmb.write(fm_path)
 
         # and then make and save filtered versions of the map
-        apply_filtering_and_save(fm_path, lpf_loc=1000, hpf_loc=1500,
-            half_width=50., path=this_cmb_path, save_diagnostics=True)
+        # apply_filtering_and_save(fm_path, lpf_loc=1000, hpf_loc=1500,
+        #     half_width=50., path=this_cmb_path, save_diagnostics=True)
 
 def main(argv):
     args = parse_args()
-
-    
+  
