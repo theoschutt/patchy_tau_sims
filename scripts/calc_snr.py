@@ -30,7 +30,7 @@ def parse_args():
 
     return args
 
-def calc_snr_per_object(datavector, cov, N=7676):
+def calc_snr_per_object(datavector, cov, N=7659):
     snr_sq = datavector @ np.linalg.solve(cov, datavector)
     snr_per_object = np.sqrt(snr_sq / N)
     print('snr_sq:', snr_sq)
