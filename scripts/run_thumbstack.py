@@ -62,8 +62,14 @@ def parse_args():
     parser.add_argument('--dostackmap',
         default=False,
         help='Boolean whether to compute stacked map')
+    parser.add_argument('--equalsignedweights',
+        default=False, action='store_const', const=True,
+        help='Whether to equalize number of +/- weights')
+    parser.add_argument('--nproc',
+        default=1,
+        help='Number of processes for parallel computing')
     parser.add_argument('--outpath',
-        help='Path to directory to save output files')
+        help='Non-default path to directory to save output files')
  
     args = parser.parse_args()
 
@@ -129,7 +135,7 @@ def setup_maps(lpf_path, hpf_path, side_length=10., ra_min=200.,
 
     return lpf_enmap, hpf_enmap, boxmask
 
-def main(argv):
+def main():
     args = parse_args()
 
     # Write text file logging what command line args were used
@@ -146,7 +152,7 @@ def main(argv):
     u, massConv = initialize()
 
     if args.test:
-        nObj = 10
+        nObj = 11 #ensures unequal pos/neg weights
         do_bootstrap = False
         do_stacked_map = True
     else:
@@ -154,8 +160,13 @@ def main(argv):
         do_stacked_map = args.dostackmap
         do_bootstrap = args.dobootstrap
 
-    galcat = Catalog(u, massConv, name=args.catname, nObj=nObj,
-        pathInCatalog=args.catpath, workDir=args.workdir)
+    galcat = Catalog(
+        u,
+        massConv,
+        name=args.catname,
+        nObj=nObj,
+        pathInCatalog=args.catpath,
+        workDir=args.workdir)
 
     lpf_enmap, hpf_enmap, boxmask = setup_maps(
         args.lpfpath,
@@ -176,10 +187,11 @@ def main(argv):
         cmbMap2=lpf_enmap,
         name=args.tsname,
         save=True,
-        nProc=1,
+        nProc=args.nproc,
         filterTypes=args.filtertype,
         estimatorTypes=args.esttype,
         doBootstrap=do_bootstrap,
+        equalSignedWeights=args.equalsignedweights,
         workDir=args.workdir,
         runEndToEnd=True,
         test=args.test,
@@ -187,4 +199,4 @@ def main(argv):
     )
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()
