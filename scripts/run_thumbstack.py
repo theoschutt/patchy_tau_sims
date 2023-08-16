@@ -41,9 +41,11 @@ def parse_args():
         help='Name of catalog (used in path)')
     parser.add_argument('--ra_min',
         default=200.,
+        type=float,
         help='Min RA of map')
     parser.add_argument('--dec_min',
         default=10.,
+        type=float,
         help='Min DEC of map')
     parser.add_argument('--catname',
         help='Name of catalog (used in path)')
@@ -62,11 +64,15 @@ def parse_args():
     parser.add_argument('--dostackmap',
         default=False,
         help='Boolean whether to compute stacked map')
+    parser.add_argument('--t_large_min',
+        default=None,
+        help='Minimum abs value temperature for T_large in stack')
     parser.add_argument('--equalsignedweights',
         default=False, action='store_const', const=True,
         help='Whether to equalize number of +/- weights')
     parser.add_argument('--nproc',
         default=1,
+        type=int,
         help='Number of processes for parallel computing')
     parser.add_argument('--outpath',
         help='Non-default path to directory to save output files')
@@ -191,6 +197,7 @@ def main():
         filterTypes=args.filtertype,
         estimatorTypes=args.esttype,
         doBootstrap=do_bootstrap,
+        tLargeMin=args.t_large_min,
         equalSignedWeights=args.equalsignedweights,
         workDir=args.workdir,
         runEndToEnd=True,
