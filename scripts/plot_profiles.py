@@ -15,6 +15,18 @@ def parse_args():
         help='which type of plot to plot'
     )
     parser.add_argument(
+        '--plot_title',
+        type=str,
+        default='',
+        help='which type of plot to plot'
+    )
+    parser.add_argument(
+        '--plot_labels',
+        nargs='+',
+        type=str,
+        help='list of plot labels'
+    )
+    parser.add_argument(
         '--data_files',
         nargs='+',
         default=None,
@@ -31,14 +43,20 @@ def parse_args():
 
     return args
 
-def plot_signal_curve(data_txt_list, fn):
+def plot_signal_curve(data_txt_list, fn, title, labels):
     fig, ax = plt.subplots(1,1, figsize=(10,5))
-    labels = ['kSZ TI', 'kSZ Sgn']
+    # labels = ['tSZ TI', 'tSZ Sgn']
+    # labels = ['kSZ TI', 'kSZ Sgn']
+    # labels = ['CIB TI', 'CIB Sgn']
+    # labels = ['TI', 'Sgn', r'TI, +=-', r'Sgn, +=-']
+    # labels = ['TI', 'Sgn', r'TI, |T_L| > 2\mu$K', r'Sgn, |T_L| > 2\mu$K']
+    ax.set_title(title)
 
 #     labels = [r'$\tau$ TI', 'tSZ TI', 'kSZ TI', 'CIB TI', 'AdvACT spectrum']
     # labels = [r'$\tau$ Sgn', 'tSZ Sgn', 'kSZ Sgn', 'CIB Sgn', 'AdvACT spectrum']
-    colors = ['k', 'r', 'b', 'orange', 'c']
-    lss = ['-', '-', '-', '-', '--']
+    # colors = ['k', 'r', 'b', 'orange', 'c']
+    colors = ['k', 'r', 'k', 'r', 'c']
+    lss = ['-', '-', '--', '--', '--']
 
     rad2arcmin = 180. * 60. / np.pi
 
@@ -60,10 +78,10 @@ def plot_signal_curve(data_txt_list, fn):
         t /= areas
         t_err /= areas
 
-        ax.errorbar(r, t, t_err, label=labels[i], c=colors[i], ls=lss[i])
+        ax.errorbar(r+i*0.03, t, t_err, label=labels[i], c=colors[i], ls=lss[i])
         ax.set_ylabel(r'$\left<\tau\right>$')
         ax.set_xlabel('Radius [arcmin]')
-        ax.legend()
+        ax.legend(framealpha=1.)
     plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
     plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
 
@@ -71,10 +89,10 @@ def plot_signal_curve(data_txt_list, fn):
 def plot_noise_curves(data_txt_list, fn):
     pass
 
-def plot_signal_ratios(data_txt_list, fn):
+def plot_signal_ratios(data_txt_list, fn, title, labels):
     fig, ax = plt.subplots(1,1, figsize=(10,5))
 
-    labels = [r'$\tau$ TI', 'tSZ TI', 'kSZ TI', 'CIB TI', 'AdvACT spectrum']
+    # labels = [r'$\tau$ TI', 'tSZ TI', 'kSZ TI', 'CIB TI', 'AdvACT spectrum']
     # labels = [r'$\tau$ Sgn', 'tSZ Sgn', 'kSZ Sgn', 'CIB Sgn', 'AdvACT spectrum']
     colors = ['k', 'r', 'b', 'orange', 'c']
     lss = ['-', '-', '-', '-', '--']
@@ -107,21 +125,36 @@ def plot_signal_ratios(data_txt_list, fn):
         ax.plot(r, t/tau, label=labels[i], c=colors[i], ls=lss[i])
         ax.set_ylabel(r'$\left<\tau\right>$/$\left<\tau_{\rm true}\right>$')
         ax.set_xlabel('Radius [arcmin]')
-        ax.legend()
+        ax.legend(framealpha=1.)
     plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
     plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
+
+def write_log(args, outfile):
+    # Write text file logging what command line args were used
+    log_fn =  outfile + '_args.log'
+    print('Writing argument log file:', log_fn)
+    arg_dict = vars(args)
+    with open(log_fn, 'w') as f:
+        for arg in arg_dict:
+            f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
+
 
 def main():
     args = parse_args()
 
+    if not os.path.exists(os.path.split(args.outfile)[0]):
+        os.makedirs(os.path.split(args.outfile)[0])
+
+    write_log(args, args.outfile)
+
     if args.plot_type == 'signal':
-        plot_signal_curve(args.data_files, args.outfile)
+        plot_signal_curve(args.data_files, args.outfile, args.plot_title, args.plot_labels)
 
     elif args.plot_type == 'noise':
         plot_noise_curves(args.data_files, args.outfile)
 
     elif args.plot_type == 'tau_ratio':
-        plot_signal_ratios(args.data_files, args.outfile)
+        plot_signal_ratios(args.data_files, args.outfile, args.plot_title, args.plot_labels)
 
     else:
         raise ValueError('Invalid plot type specified:', args.plot_type)

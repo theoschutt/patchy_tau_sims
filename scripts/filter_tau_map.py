@@ -30,6 +30,9 @@ def parse_args():
     parser.add_argument('--sub_const',
                         default=None, type=float,
                         help='Constant to subtract from the entire map (before applying beam). For pure tau maps.')
+    parser.add_argument('--halfconst_map',
+                        default=None, type=float,
+                        help='Constant to use when making a half-n-half constant map (i.e. 50% +const, 50% -const map) for systematics studies.')
     parser.add_argument('--tau_fwhm',
                         default=5., # from Will's fit
                         type=float,
@@ -137,6 +140,32 @@ def make_const_map(flatmap, const):
     constmap.name += '_CONST%s'%str(const)
     return constmap
 
+def make_halfconst_map(flatmap, const=1.):
+    constmap_v = flatmap.copy()
+    constmap_h = flatmap.copy()
+    constmap_4 = flatmap.copy()
+    x, y = flatmap.data.shape
+    print(x,y)
+
+    constmap_v.data[:x//2,:] = const * np.ones_like(flatmap.data[:x//2,:])
+    constmap_v.data[x//2:,:] = - const * np.ones_like(flatmap.data[x//2:,:])
+    constmap_v.dataFourier = constmap_v.fourier(constmap_v.data)
+    constmap_v.name += '_HALF-N-HALF_vert_CONST%s'%str(const)
+    constmap_h.data[:,:x//2] = const * np.ones_like(flatmap.data[:,:x//2])
+    constmap_h.data[:,x//2:] = - const * np.ones_like(flatmap.data[:,x//2:])
+    constmap_h.dataFourier = constmap_h.fourier(constmap_h.data)
+    constmap_h.name += '_HALF-N-HALF_horz_CONST%s'%str(const)
+
+    constmap_4.data[:x//2,:x//2] = const * np.ones_like(flatmap.data[:x//2,:x//2])
+    constmap_4.data[x//2:,x//2:] = const * np.ones_like(flatmap.data[x//2:,x//2:])
+    constmap_4.data[:x//2,x//2:] = -const * np.ones_like(flatmap.data[:x//2,x//2:])
+    constmap_4.data[x//2:,:x//2] = -const * np.ones_like(flatmap.data[x//2:,:x//2])
+    constmap_4.dataFourier = constmap_4.fourier(constmap_4.data)
+    constmap_4.name += '_HALF-N-HALF_quad_CONST%s'%str(const)
+
+
+    return constmap_v, constmap_h, constmap_4
+
 def load_flatmap(flatmap_fits):
     print('Loading flatmap file:', flatmap_fits)
     flatmap = make_basemap()
@@ -216,7 +245,7 @@ def save_flatmap(flatmap, path=None, save_image=True, save_diagnostics=True):
     if save_image:
         fitsio.write(im_path, flatmap.data)
 
-def main(argv):
+def main():
     args = parse_args()
     
     if not os.path.exists(args.outpath):
@@ -238,6 +267,11 @@ def main(argv):
     else:
         raise ValueError('Must specify an input image or flatmap FITS file.')
 
+    if args.halfconst_map is not None:
+        hc_map_v, hc_map_h, hc_map_4 = make_halfconst_map(flatmap, const=args.halfconst_map)
+        save_flatmap(hc_map_v, path=args.outpath, save_image=args.save_image)
+        save_flatmap(hc_map_h, path=args.outpath, save_image=args.save_image)
+        save_flatmap(hc_map_4, path=args.outpath, save_image=args.save_image)
     if args.renorm is not None:
         flatmap = renorm_image(
             flatmap, target_peak=args.renorm, tau_fwhm=args.tau_fwhm)
@@ -260,4 +294,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main()

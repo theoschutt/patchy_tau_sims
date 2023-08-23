@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../ThumbStack')
+sys.path.append('../../ThumbStack')
 
 import universe
 from universe import *
@@ -13,11 +13,12 @@ import cmb
 from cmb import *
 # load catalogs
 # 7642 entries over [200<RA<210, 10<DEC<20]
-catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_v2/catalog.txt'
-randcatpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_randradec_v2/catalog.txt'
-catname = 'cmass_m_10x10_sig5'
-randname = '%s_randradec'%catname
-
+catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/grid_10x10_6x6src/catalog.txt'
+# randcatpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_randradec_v2/catalog.txt'
+catname = 'grid_10x10_6x6src'
+# randname = '%s_randradec'%catname
+cattype = 'radec'
+# cattype = 'cmass'
 # 10k entries, CMASS positions over [200<RA<211.5, 10<DEC<21.4]
 # catpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10kgal/cmass_m_10kgal_catalog.txt'
 # 10k entries, RADEC randomized over [200<RA<210, 10<DEC<20]
@@ -43,9 +44,10 @@ cmass10x10 = Catalog(
     massConversion,
     name=catname,
     pathInCatalog=catpath,
-    save=True
+    save=True,
+    catType=cattype
 )
-
+"""
 cmass10x10rand = Catalog(
     u,
     massConversion,
@@ -53,10 +55,10 @@ cmass10x10rand = Catalog(
     pathInCatalog=randcatpath,
     save=True
 )
-
+"""
 # calc mean tau over all galaxies
-mean_tau = np.mean(cmass10x10.integratedTau)
-print('Mean tau: ', mean_tau)
+# mean_tau = np.mean(cmass10x10.integratedTau)
+# print('Mean tau: ', mean_tau)
 
 # Generate empty square map, then make a mock map
 # Generate an empty square map with RA in [200., 210.] and DEC in [10., 20.]
@@ -80,4 +82,4 @@ fwhm = 5.
 sigma = fwhm / np.sqrt(8.*np.log(2))
 test = False
 cmass10x10.generateMockMaps(boxMask, sigma=sigma, test=test)
-cmass10x10rand.generateMockMaps(boxMask, sigma=sigma, test=test)
+#cmass10x10rand.generateMockMaps(boxMask, sigma=sigma, test=test)

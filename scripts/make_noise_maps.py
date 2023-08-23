@@ -107,6 +107,17 @@ def make_cmb(lMin=30., lMax=10000., nBins=150, beam=1., noise=1.):
     
     return cmb
 
+def gen_screened_map(tau_fits, name):
+    basemap = make_map(10., 10., 0.5)
+    cmb = make_cmb()
+    dat = fitsio.read(tau_fits)
+    forCtot = lambda l: cmb.funlensedTT(l)# * cmb.fbeam(l)**2
+    cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
+    cmbmap.data *= (1-dat)
+    cmbmap.dataFourier = cmbmap.fourier(cmbmap.data)
+
+    return cmbmap
+
 def gen_cmb_fg_map(fg_fits, name, type='add'):
     basemap = make_map(10., 10., 0.5)
     cmb = make_cmb(beam=1.6)

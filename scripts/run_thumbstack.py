@@ -62,10 +62,12 @@ def parse_args():
         default=True,
         help='Boolean whether to compute bootstrap covariance')
     parser.add_argument('--dostackmap',
+        action='store_const', const=True,
         default=False,
-        help='Boolean whether to compute stacked map')
+        help='Whether to compute stacked map')
     parser.add_argument('--t_large_min',
         default=None,
+        type=float,
         help='Minimum abs value temperature for T_large in stack')
     parser.add_argument('--equalsignedweights',
         default=False, action='store_const', const=True,
@@ -158,7 +160,7 @@ def main():
     u, massConv = initialize()
 
     if args.test:
-        nObj = 11 #ensures unequal pos/neg weights
+        nObj = 5 #ensures unequal pos/neg weights
         do_bootstrap = False
         do_stacked_map = True
     else:
