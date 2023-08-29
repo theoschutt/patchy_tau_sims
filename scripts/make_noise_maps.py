@@ -83,7 +83,7 @@ def make_map(sizeX=10., sizeY=10., pixel_scale=0.5):
 
     # basic map object
     baseMap = FlatMap(nX=nX, nY=nY, sizeX=sizeX*np.pi/180., sizeY=sizeY*np.pi/180.)
-    
+
     return baseMap
 
 def make_cmb(lMin=30., lMax=10000., nBins=150, beam=1., noise=1.):
@@ -104,7 +104,7 @@ def make_cmb(lMin=30., lMax=10000., nBins=150, beam=1., noise=1.):
     #     beam: 1.4' update: 1.6'
     #     noise: 15 uK*arcmin
     cmb = StageIVCMB(beam=beam, noise=noise, lMin=lMin, lMaxT=lMax, lMaxP=lMax, atm=False)
-    
+
     return cmb
 
 def gen_screened_map(tau_fits, name):
@@ -118,17 +118,20 @@ def gen_screened_map(tau_fits, name):
 
     return cmbmap
 
-def gen_cmb_fg_map(fg_fits, name, type='add'):
-    basemap = make_map(10., 10., 0.5)
-    cmb = make_cmb(beam=1.6)
+def gen_cmb_fg_map(fg_fits, cmb_fits=None, name='test'):
+    cmbmap = make_map(10., 10., 0.5)
     dat = fitsio.read(fg_fits)
-    forCtot = lambda l: cmb.funlensedTT(l) * cmb.fbeam(l)**2
-    cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
-    if type == 'mult':
-        cmbmap.data *= dat
-    elif type == 'add':
-        cmbmap.data += dat
+
+    if cmb_fits is None:
+        cmb = make_cmb()
+        forCtot = lambda l: cmb.funlensedTT(l)
+        cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
+    else:
+        cmbdat = fitsio.read(cmb_fits)
+    cmbmap.data = cmbdat
+    cmbmap.data += dat
     cmbmap.dataFourier = cmbmap.fourier(cmbmap.data)
+    cmbmap.name = name
 
     return cmbmap
 
@@ -148,7 +151,7 @@ def gen_map_from_fn(powspec_fn, cmb, flat_map, name, lMin=30., lMax=10000., seed
     this_cmb_map.name = name
     this_cmb_map.data = cmbtot
     this_cmb_map.dataFourier = cmbtotFourier
-    
+
     return this_cmb_map
 
 def gen_map_from_curve(ell, f, cmb, flat_map, name, seed=42):
@@ -172,7 +175,7 @@ def gen_map_from_curve(ell, f, cmb, flat_map, name, seed=42):
     this_cmb_map.name = name
     this_cmb_map.data = cmbtot
     this_cmb_map.dataFourier = cmbtotFourier
-    
+
     return this_cmb_map
 
 def save_map(flatmap, cmb, path, name):
@@ -285,7 +288,7 @@ def make_s4_noise_maps(path='output/cmb_maps/10x10_noise_maps/s4_l30-10k_v1'):
         print("plot and save the power spectrum")
         ps_path = os.path.join(this_cmb_path, '%s_powspec.png'%name)
         lCen, Cl, sCl = this_cmb.powerSpectrum(theory=[cmb.funlensedTT,
-            cmb.flensedTT, cmb.fdetectorNoise], nBins=150, plot=True, 
+            cmb.flensedTT, cmb.fdetectorNoise], nBins=150, plot=True,
             save=True, path=ps_path)
 
         # save CMB map
@@ -299,4 +302,4 @@ def make_s4_noise_maps(path='output/cmb_maps/10x10_noise_maps/s4_l30-10k_v1'):
 
 def main(argv):
     args = parse_args()
-  
+

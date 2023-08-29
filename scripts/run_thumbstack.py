@@ -78,7 +78,7 @@ def parse_args():
         help='Number of processes for parallel computing')
     parser.add_argument('--outpath',
         help='Non-default path to directory to save output files')
- 
+
     args = parser.parse_args()
 
     return args
@@ -99,7 +99,7 @@ def make_basemap(sizeX, sizeY, pixel_scale):
     # basic map object
     baseMap = FlatMap(nX=nX, nY=nY,
         sizeX=sizeX*np.pi/180., sizeY=sizeY*np.pi/180.)
-    
+
     return baseMap
 
 def make_box(side_length=10., ra_min=200., dec_min=10., pix_scale=0.5):
@@ -110,7 +110,7 @@ def make_box(side_length=10., ra_min=200., dec_min=10., pix_scale=0.5):
     ra_max = ra_min + side_length
     dec_max = dec_min + side_length
     # convention for defining box corners: [[dec_min, ra_max],[dec_max, ra_min]]
-    box = np.array([[dec_min, ra_max],[dec_max, ra_min]]) * utils.degree 
+    box = np.array([[dec_min, ra_max],[dec_max, ra_min]]) * utils.degree
     shape, wcs = enmap.geometry(pos=box, res=pix_scale * utils.arcmin,
         proj='car')
 

@@ -1,4 +1,4 @@
-"""filter_map.py: Applies beam and low- and high-pass filtering to an 
+"""filter_map.py: Applies beam and low- and high-pass filtering to an
 image FITS file (e.g. from generateMockMaps).
 If used as main, expects as CLI args fits file name (including path),
 output file name prefix, and path to save directory.
@@ -22,7 +22,6 @@ def parse_args():
                         default=None,
                         help='Full Path to the unfiltered flatmap FITS file')
     parser.add_argument('--flatmap_name',
-                        default='test',
                         help='Name stem for the flatmap to be made from the image FITS')
     parser.add_argument('--renorm',
                         default=None, #0.000245, # from Will's fit
@@ -32,12 +31,13 @@ def parse_args():
                         help='Constant to subtract from the entire map (before applying beam). For pure tau maps.')
     parser.add_argument('--halfconst_map',
                         default=None, type=float,
-                        help='Constant to use when making a half-n-half constant map (i.e. 50% +const, 50% -const map) for systematics studies.')
+                        help='Constant to use when making a half-n-half constant map (i.e. 50%% +const, 50%% -const map) for systematics studies.')
     parser.add_argument('--tau_fwhm',
                         default=5., # from Will's fit
                         type=float,
                         help='tau Gaussian profile FWHM in arcmin that used to make unfiltered tau map (before applying beam)')
     parser.add_argument('--outpath',
+                        default=None,
                         help='path to directory to save output files')
     parser.add_argument('--save_image', default=True,
                         action='store_const', const=True,
@@ -163,7 +163,6 @@ def make_halfconst_map(flatmap, const=1.):
     constmap_4.dataFourier = constmap_4.fourier(constmap_4.data)
     constmap_4.name += '_HALF-N-HALF_quad_CONST%s'%str(const)
 
-
     return constmap_v, constmap_h, constmap_4
 
 def load_flatmap(flatmap_fits):
@@ -190,7 +189,7 @@ def apply_beam(flatmap, fwhm):
     beamedmap.dataFourier = beamedmap.filterFourierIsotropic(fW=beamfn)
     beamedmap.data = beamedmap.inverseFourier()
     beamedmap.name += '_beam%s'%str(fwhm)
-    
+
     return beamedmap
 
 def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, width=100.):
@@ -210,7 +209,7 @@ def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, wid
     lpf_map = flatmap.copy()
     lpf_map.data = filtData_lo
     lpf_map.dataFourier = filtFourier_lo
-    
+
     # make HPF map
     print('Applying high-pass filter.')
     filtFourier_high = flatmap.filterFourierIsotropic(fW=hpf)
@@ -218,14 +217,14 @@ def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, wid
     hpf_map = flatmap.copy()
     hpf_map.data = filtData_high
     hpf_map.dataFourier = filtFourier_high
-    
+
     if filter_type == 'theo':
         lpf_map.name += '_lpf%it'%lpf_loc
         hpf_map.name += '_hpf%it'%hpf_loc
     elif filter_type == 'will':
         lpf_map.name += '_lpf2075w'
         hpf_map.name += '_hpf2425w'
-    
+
     return lpf_map, hpf_map
 
 def save_flatmap(flatmap, path=None, save_image=True, save_diagnostics=True):
@@ -243,29 +242,39 @@ def save_flatmap(flatmap, path=None, save_image=True, save_diagnostics=True):
     flatmap.write(fm_path)
     im_path = os.path.join(path, '%s_image.fits'%flatmap.name)
     if save_image:
+        print('Saving image fits:', im_path)
         fitsio.write(im_path, flatmap.data)
 
 def main():
     args = parse_args()
-    
+
+    if args.outpath is None:
+        if args.flatmap_fits is not None:
+            args.outpath = os.path.split(args.flatmap_fits)[0]
+        elif args.image_fits is not None:
+            args.outpath = os.path.split(args.image_fits)[0]
+
     if not os.path.exists(args.outpath):
         os.makedirs(args.outpath)
 
+    if args.flatmap_fits is not None:
+        flatmap = load_flatmap(args.flatmap_fits)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+    elif args.image_fits is not None:
+        flatmap = make_flatmap(args.image_fits, name=args.flatmap_name)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+    else:
+        raise ValueError('Must specify an input image or flatmap FITS file.')
+
     # Write text file logging what command line args were used
+    if args.flatmap_name is None:
+        args.flatmap_name = flatmap.name
     log_fn = os.path.join(args.outpath, 'args_%s.log'%args.flatmap_name)
     print('Writing argument log file:', log_fn)
     arg_dict = vars(args)
     with open(log_fn, 'w') as f:
         for arg in arg_dict:
             f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
-    
-    if args.flatmap_fits is not None:
-        flatmap = load_flatmap(args.flatmap_fits)
-    elif args.image_fits is not None:
-        flatmap = make_flatmap(args.image_fits, name=args.flatmap_name)
-        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
-    else:
-        raise ValueError('Must specify an input image or flatmap FITS file.')
 
     if args.halfconst_map is not None:
         hc_map_v, hc_map_h, hc_map_4 = make_halfconst_map(flatmap, const=args.halfconst_map)
@@ -286,12 +295,11 @@ def main():
     if args.beam_fwhm is not None:
         flatmap = apply_beam(flatmap, fwhm=args.beam_fwhm)
         save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
-    
+
     lpf_map, hpf_map = apply_filtering(flatmap, args.filter_type, args.lpf_loc,
                                        args.hpf_loc, args.filter_width)
     save_flatmap(lpf_map, path=args.outpath, save_image=args.save_image)
     save_flatmap(hpf_map, path=args.outpath, save_image=args.save_image)
-
 
 if __name__ == '__main__':
     main()

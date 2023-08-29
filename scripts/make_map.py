@@ -13,12 +13,14 @@ import cmb
 from cmb import *
 # load catalogs
 # 7642 entries over [200<RA<210, 10<DEC<20]
-catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/grid_10x10_6x6src/catalog.txt'
+catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/grid_10x10_10x10src_periodic/catalog.txt'
+# catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_v2/catalog.txt'
 # randcatpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_randradec_v2/catalog.txt'
-catname = 'grid_10x10_6x6src'
+catname = 'grid_10x10_10x10src_periodic'
+# catname = 'cmass_m_10x10_v2_fwhm5'
 # randname = '%s_randradec'%catname
 cattype = 'radec'
-# cattype = 'cmass'
+#cattype = 'cmass'
 # 10k entries, CMASS positions over [200<RA<211.5, 10<DEC<21.4]
 # catpath = '/home/theo/Documents/research/CMB/tau_sims/output/catalog/cmass_m_10kgal/cmass_m_10kgal_catalog.txt'
 # 10k entries, RADEC randomized over [200<RA<210, 10<DEC<20]
@@ -45,7 +47,8 @@ cmass10x10 = Catalog(
     name=catname,
     pathInCatalog=catpath,
     save=True,
-    catType=cattype
+    catType=cattype,
+    workDir='..'
 )
 """
 cmass10x10rand = Catalog(

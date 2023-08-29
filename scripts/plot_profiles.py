@@ -15,16 +15,24 @@ def parse_args():
         help='which type of plot to plot'
     )
     parser.add_argument(
-        '--plot_title',
+        '--title',
         type=str,
         default='',
-        help='which type of plot to plot'
+        help='Plot title'
     )
     parser.add_argument(
-        '--plot_labels',
+        '--labels',
         nargs='+',
         type=str,
+        default=['TI', 'Sgn'],
         help='list of plot labels'
+    )
+    parser.add_argument(
+        '--ls',
+        nargs='+',
+        type=str,
+        default=['-', '-'],
+        help="list of linestyles to use, e.g. ['-', '--', '-.', ':']"
     )
     parser.add_argument(
         '--data_files',
@@ -43,7 +51,7 @@ def parse_args():
 
     return args
 
-def plot_signal_curve(data_txt_list, fn, title, labels):
+def plot_signal_curve(data_txt_list, fn, title, labels, lss):
     fig, ax = plt.subplots(1,1, figsize=(10,5))
     # labels = ['tSZ TI', 'tSZ Sgn']
     # labels = ['kSZ TI', 'kSZ Sgn']
@@ -56,7 +64,7 @@ def plot_signal_curve(data_txt_list, fn, title, labels):
     # labels = [r'$\tau$ Sgn', 'tSZ Sgn', 'kSZ Sgn', 'CIB Sgn', 'AdvACT spectrum']
     # colors = ['k', 'r', 'b', 'orange', 'c']
     colors = ['k', 'r', 'k', 'r', 'c']
-    lss = ['-', '-', '--', '--', '--']
+    # lss = ['-', '-', '--', '--', '--']
 
     rad2arcmin = 180. * 60. / np.pi
 
@@ -81,7 +89,7 @@ def plot_signal_curve(data_txt_list, fn, title, labels):
         ax.errorbar(r+i*0.03, t, t_err, label=labels[i], c=colors[i], ls=lss[i])
         ax.set_ylabel(r'$\left<\tau\right>$')
         ax.set_xlabel('Radius [arcmin]')
-        ax.legend(framealpha=1.)
+        ax.legend(framealpha=1., loc='upper right')
     plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
     plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
 
@@ -89,13 +97,13 @@ def plot_signal_curve(data_txt_list, fn, title, labels):
 def plot_noise_curves(data_txt_list, fn):
     pass
 
-def plot_signal_ratios(data_txt_list, fn, title, labels):
+def plot_signal_ratios(data_txt_list, fn, title, labels, lss):
     fig, ax = plt.subplots(1,1, figsize=(10,5))
 
     # labels = [r'$\tau$ TI', 'tSZ TI', 'kSZ TI', 'CIB TI', 'AdvACT spectrum']
     # labels = [r'$\tau$ Sgn', 'tSZ Sgn', 'kSZ Sgn', 'CIB Sgn', 'AdvACT spectrum']
     colors = ['k', 'r', 'b', 'orange', 'c']
-    lss = ['-', '-', '-', '-', '--']
+    # lss = ['-', '-', '-', '-', '--']
 
     rad2arcmin = 180. * 60. / np.pi
 
@@ -148,13 +156,13 @@ def main():
     write_log(args, args.outfile)
 
     if args.plot_type == 'signal':
-        plot_signal_curve(args.data_files, args.outfile, args.plot_title, args.plot_labels)
+        plot_signal_curve(args.data_files, args.outfile, args.title, args.labels, args.ls)
 
     elif args.plot_type == 'noise':
         plot_noise_curves(args.data_files, args.outfile)
 
     elif args.plot_type == 'tau_ratio':
-        plot_signal_ratios(args.data_files, args.outfile, args.plot_title, args.plot_labels)
+        plot_signal_ratios(args.data_files, args.outfile, args.title, args.labels, args.ls)
 
     else:
         raise ValueError('Invalid plot type specified:', args.plot_type)
