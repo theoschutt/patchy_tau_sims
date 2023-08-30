@@ -115,25 +115,41 @@ def gen_screened_map(tau_fits, name):
     cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
     cmbmap.data *= (1-dat)
     cmbmap.dataFourier = cmbmap.fourier(cmbmap.data)
+    cmbmap.name = name
 
     return cmbmap
 
-def gen_cmb_fg_map(fg_fits, cmb_fits=None, name='test'):
-    cmbmap = make_map(10., 10., 0.5)
-    dat = fitsio.read(fg_fits)
-
-    if cmb_fits is None:
-        cmb = make_cmb()
-        forCtot = lambda l: cmb.funlensedTT(l)
-        cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
-    else:
-        cmbdat = fitsio.read(cmb_fits)
-    cmbmap.data = cmbdat
-    cmbmap.data += dat
+def gen_lensed_map(kappa_fits, name):
+    basemap = make_map(10., 10., 0.5)
+    cmb = make_cmb()
+    kappaData = fitsio.read(kappa_fits)
+    kappaFourier = basemap.fourier(data=kappaData)
+    forCtot = lambda l: cmb.funlensedTT(l)# * cmb.fbeam(l)**2
+    cmbmap = gen_map_from_fn(forCtot, cmb, basemap, name)
+    cmbmap.data = cmbmap.doLensing(kappaFourier=kappaFourier)
     cmbmap.dataFourier = cmbmap.fourier(cmbmap.data)
     cmbmap.name = name
 
     return cmbmap
+
+def gen_cmb_fg_map(fg_fits, name, cmb_fm=None, cmb_fits=None):
+    cmb_fg_map = make_map(10., 10., 0.5)
+    dat = fitsio.read(fg_fits)
+
+    if cmb_fm is not None:
+        cmb_fg_map = cmb_fm.copy()
+    elif cmb_fits is not None:
+        cmbdat = fitsio.read(cmb_fits)
+        cmb_fg_map.data = cmbdat
+    else:
+        cmb = make_cmb()
+        forCtot = lambda l: cmb.funlensedTT(l)
+        cmb_fg_map = gen_map_from_fn(forCtot, cmb, cmb_fg_map, name)
+    cmb_fg_map.data += dat
+    cmb_fg_map.dataFourier = cmb_fg_map.fourier(cmb_fg_map.data)
+    cmb_fg_map.name = name
+
+    return cmb_fg_map
 
 def gen_map_from_fn(powspec_fn, cmb, flat_map, name, lMin=30., lMax=10000., seed=42):
     print('Generating map')
@@ -184,13 +200,13 @@ def save_map(flatmap, cmb, path, name):
         os.makedirs(this_cmb_path)
 
     # plot and save diagnostic plots
-    print("plot and save CMB map")
+    print("plot and save CMB map png")
     map_path = os.path.join(this_cmb_path, '%s_map.png'%name)
     flatmap.plot(save=True, path=map_path)
     print("plot and save the power spectrum")
     ps_path = os.path.join(this_cmb_path, '%s_powspec.png'%name)
     lCen, Cl, sCl = flatmap.powerSpectrum(theory=[cmb.funlensedTT,
-        cmb.flensedTT, cmb.fdetectorNoise], nBins=150, plot=True, 
+        cmb.flensedTT, cmb.fdetectorNoise], nBins=150, plot=True,
         save=True, path=ps_path)
 
     # save CMB map
