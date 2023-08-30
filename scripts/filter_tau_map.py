@@ -245,6 +245,8 @@ def save_flatmap(flatmap, path=None, save_image=True, save_diagnostics=True):
         print('Saving image fits:', im_path)
         fitsio.write(im_path, flatmap.data)
 
+    return fm_path
+
 def main():
     args = parse_args()
 
