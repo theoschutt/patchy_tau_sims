@@ -46,7 +46,7 @@ def parse_args():
                         default=None,
                         type=float,
                         help='FWHM in arcmin of beam to apply to map')
-    parser.add_argument('--filter_type', default='theo',
+    parser.add_argument('--filter_type', default='will',
                         help='Choose lpf/hpf functions (`theo` or `will`')
     parser.add_argument('--lpf_loc',
                         default=1000,
