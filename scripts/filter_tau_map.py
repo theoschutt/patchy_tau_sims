@@ -69,6 +69,10 @@ def fbeam(ell, real_fwhm):
     real_sigma = real_fwhm / np.sqrt(8.*np.log(2.))
     return np.exp(-0.5*(ell * real_sigma)**2)
 
+def detnoise(ell, sens_amin, real_fwhm):
+    sens_rad = sens_amin * (np.pi/180.)/60.
+    return sens_rad**2 / fbeam(ell, real_fwhm)**2
+
 def high_pass(ell, loc=1500, width=100.):
     half_width = width/2
     return erf(np.sqrt(2)/half_width*(ell-loc))/2 + 0.5
@@ -192,6 +196,16 @@ def apply_beam(flatmap, fwhm):
 
     return beamedmap
 
+def add_noise(flatmap, sens_amin, real_fwhm):
+    print('Adding detector noise with sensitivity: %.2f [muK.rad]'%sens_amin)
+    noisemap = flatmap.copy()
+    noisefn = partial(detnoise, sens_amin=sens_amin, real_fwhm=real_fwhm)
+    noisemap.dataFourier = noisemap.filterFourierIsotropic(fW=noisefn)
+    noisemap.data = noisemap.inverseFourier()
+    noisemap.name += '_noise%.2f'%sens_amin
+
+    return noisemap
+
 def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, width=100.):
     if filter_type == 'theo':
         lpf = partial(low_pass, loc=lpf_loc, width=width)
@@ -228,21 +242,22 @@ def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, wid
     return lpf_map, hpf_map
 
 def save_flatmap(flatmap, path=None, save_image=True, save_diagnostics=True):
+    print('--------------\nSaving to directory:', path)
     if save_diagnostics:
         ell_max = np.max(flatmap.l.flatten())
         ps_path = os.path.join(path, '%s_powspec.png'%flatmap.name)
-        print('Saving power spectrum plot:', ps_path)
         flatmap.powerSpectrum(nBins=int(ell_max/200), lRange=[1., ell_max],
             plot=True, save=True, path=ps_path)
+
         map_path = os.path.join(path, '%s_map.png'%flatmap.name)
-        print('Saving map image:', map_path)
         flatmap.plot(save=True, title=flatmap.name, path=map_path)
+
     fm_path = os.path.join(path, '%s_flatmap.fits'%flatmap.name)
-    print('Saving flatmap:', fm_path)
     flatmap.write(fm_path)
-    im_path = os.path.join(path, '%s_image.fits'%flatmap.name)
+
     if save_image:
-        print('Saving image fits:', im_path)
+        im_path = os.path.join(path, '%s_image.fits'%flatmap.name)
+        print('Saving image fits:', os.path.basename(im_path))
         fitsio.write(im_path, flatmap.data)
 
     return fm_path
@@ -296,6 +311,10 @@ def main():
 
     if args.beam_fwhm is not None:
         flatmap = apply_beam(flatmap, fwhm=args.beam_fwhm)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+
+    if args.sensitivity is not None:
+        flatmap = add_noise(flatmap, sens_amin=args.sensitivity, real_fwhm=args.beam_fwhm)
         save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
 
     lpf_map, hpf_map = apply_filtering(flatmap, args.filter_type, args.lpf_loc,

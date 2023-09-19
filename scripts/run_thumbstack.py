@@ -143,8 +143,7 @@ def setup_maps(lpf_path, hpf_path, side_length=10., ra_min=200.,
 
     return lpf_enmap, hpf_enmap, boxmask
 
-def main():
-    args = parse_args()
+def end2end(args):
 
     # Write text file logging what command line args were used
     outpath = os.path.join(args.workdir, "output/thumbstack/"+args.tsname)
@@ -208,4 +207,5 @@ def main():
     )
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    end2end(args)
