@@ -218,17 +218,30 @@ def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path,
         seed, seedname, seeddir, kappa_fits, tsz_fits)
 
     map_paths = gen_filtered_maps(cmbmap, cmb_lens_map, cmb_tsz_map, seeddir)
+    print('map_paths:\n', map_paths)
+    #map_paths scheme:
+    # [CMB LPF, CMB HPF,
+    # lensCMB LPF, lensCMB HPF,
+    # CMB+tSZ LPF, CMB+tSZ HPF]
 
     # setup for 4 thumbstack runs
-    map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF    x CMB HPF
-                 (map_paths[0], map_paths[1]), # CMB LPF    x CMB+lens HPF
-                 (map_paths[0], tsz_hpf_path),  # CMB LPF    x fg HPF
-                 (map_paths[2], tsz_hpf_path)]  # CMB+fg LPF x fg HPF
-
+    # map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF    x CMB HPF
+    #              (map_paths[0], map_paths[1]), # CMB LPF    x CMB+lens HPF
+    #              (map_paths[0], tsz_hpf_path),  # CMB LPF    x fg HPF
+    #              (map_paths[2], tsz_hpf_path)]  # CMB+fg LPF x fg HPF
+    # not sure about these indices above... let's redo lensing and CMBxfg
+    map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
+                 (map_paths[0], map_paths[3]), # CMB LPF x lensCMB HPF
+                 (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
+                 (map_paths[4], tsz_hpf_path)] # CMB+fg LPF x fg HPF
     # suffixes for thumbstack naming
+    # map_suffix = ['_cmb-lpf_cmb-hpf',
+    #               '_cmb-lpf_cmb+lens-hpf',
+    #               '_cmb-lpf_tsz-hpf',
+    #               '_cmb+tsz-lpf_tsz-hpf']
     map_suffix = ['_cmb-lpf_cmb-hpf',
                   '_cmb-lpf_cmb+lens-hpf',
-                  '_cmb-lpf_tsz-hpf',
+                  '_cmb+lens-lpf_cmb+lens-hpf',
                   '_cmb+tsz-lpf_tsz-hpf']
 
     # build dictionaries for the nested all_stack_dict
@@ -238,6 +251,7 @@ def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path,
 
     # for each seed 4 correlations are run
     for pair, suffix in zip(map_pairs, map_suffix):
+        print('--------------------------------------------------------------------------------')
         tsname = seedname + suffix
         lpf_enmap, hpf_enmap, boxmask = setup_maps(pair[0], pair[1])
 

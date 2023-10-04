@@ -38,7 +38,7 @@ def parse_args():
 
     return args
 
-def compute_stack(t_small, t_large, t_large_norm, t_large_min, est, balance_signs):
+def compute_stack(t_small, t_large, t_large_norm, est, t_large_min, balance_signs):
     if t_large_min is not None:
         mask = np.abs(t_large_norm[:,0]) >= t_large_min
         print(len(t_small), sum(mask[:]), mask.shape)
@@ -55,7 +55,7 @@ def compute_stack(t_small, t_large, t_large_norm, t_large_min, est, balance_sign
     print(weights)
 
     if balance_signs:
-        diff = np.sum(t_large_norm[:,0] > 0) - np.sum(t_large_norm[:,0] < 0)
+        diff = np.sum(t_large[:,0] > 0) - np.sum(t_large[:,0] < 0)
         print('EqualSignedWeights diff:', diff)
         if diff == 0:
             pass # do nothing. The number of + and - weights are already equal
@@ -99,7 +99,10 @@ def write_log(args, pathOut, tag):
     # Write text file logging what command line args were used
     log_fn = os.path.join(pathOut, 'args_%s.log'%tag)
     print('Writing argument log file:', log_fn)
-    arg_dict = vars(args)
+    if not isinstance(args, dict):
+        arg_dict = vars(args)
+    else:
+        arg_dict = args
     with open(log_fn, 'w') as f:
         for arg in arg_dict:
             f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
@@ -127,7 +130,7 @@ def main():
 
     for est in ['ti', 'sgn']:
         stack, sStack = compute_stack(
-            t_small, t_large, t_large_norm, args.t_large_min, est, args.balance_signs)
+            t_small, t_large, t_large_norm, est, args.t_large_min, args.balance_signs)
         save_stack(stack, sStack, est, pathOut)
 
 if __name__ == '__main__':

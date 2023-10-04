@@ -25,6 +25,7 @@ def parse_args():
                         help='Name stem for the flatmap to be made from the image FITS')
     parser.add_argument('--renorm',
                         default=None, #0.000245, # from Will's fit
+                        type=float,
                         help='target peak value for the tau Gaussian profile (before applying beam)')
     parser.add_argument('--sub_const',
                         default=None, type=float,
@@ -35,7 +36,7 @@ def parse_args():
     parser.add_argument('--tau_fwhm',
                         default=5., # from Will's fit
                         type=float,
-                        help='tau Gaussian profile FWHM in arcmin that used to make unfiltered tau map (before applying beam)')
+                        help='tau Gaussian profile FWHM in arcmin that used to make unfiltered tau map (before applying beam). Needed when renorming. [default: 5.]')
     parser.add_argument('--outpath',
                         default=None,
                         help='path to directory to save output files')
@@ -46,8 +47,12 @@ def parse_args():
                         default=None,
                         type=float,
                         help='FWHM in arcmin of beam to apply to map')
+    parser.add_argument('--sensitivity',
+                        default=None,
+                        type=float,
+                        help='Noise in uK*arcmin to apply to map')
     parser.add_argument('--filter_type', default='will',
-                        help='Choose lpf/hpf functions (`theo` or `will`')
+            help='Choose lpf/hpf functions (`theo` or `will`) [default: will]')
     parser.add_argument('--lpf_loc',
                         default=1000,
                         type=int,
@@ -66,6 +71,7 @@ def parse_args():
     return args
 
 def fbeam(ell, real_fwhm):
+    """real_fwhm [rad]"""
     real_sigma = real_fwhm / np.sqrt(8.*np.log(2.))
     return np.exp(-0.5*(ell * real_sigma)**2)
 
@@ -122,7 +128,8 @@ def renorm_map(flatmap, target_peak=0.000245, tau_fwhm=5.0):
     gauss_norm = 1. / 2. / np.pi / sigma**2
     norm = target_peak / gauss_norm
     renormmap.data *= norm
-    renormmap.name += '_renorm%.2e'%renorm
+    renormmap.dataFourier = renormmap.fourier()
+    renormmap.name += '_renorm%.2e'%target_peak
     return renormmap
 
 def subtract_const(flatmap, const):
@@ -145,20 +152,20 @@ def make_const_map(flatmap, const):
     return constmap
 
 def make_halfconst_map(flatmap, const=1.):
-    constmap_v = flatmap.copy()
-    constmap_h = flatmap.copy()
+    #constmap_v = flatmap.copy()
+    #constmap_h = flatmap.copy()
     constmap_4 = flatmap.copy()
     x, y = flatmap.data.shape
     print(x,y)
 
-    constmap_v.data[:x//2,:] = const * np.ones_like(flatmap.data[:x//2,:])
-    constmap_v.data[x//2:,:] = - const * np.ones_like(flatmap.data[x//2:,:])
-    constmap_v.dataFourier = constmap_v.fourier(constmap_v.data)
-    constmap_v.name += '_HALF-N-HALF_vert_CONST%s'%str(const)
-    constmap_h.data[:,:x//2] = const * np.ones_like(flatmap.data[:,:x//2])
-    constmap_h.data[:,x//2:] = - const * np.ones_like(flatmap.data[:,x//2:])
-    constmap_h.dataFourier = constmap_h.fourier(constmap_h.data)
-    constmap_h.name += '_HALF-N-HALF_horz_CONST%s'%str(const)
+    # constmap_v.data[:x//2,:] = const * np.ones_like(flatmap.data[:x//2,:])
+    # constmap_v.data[x//2:,:] = - const * np.ones_like(flatmap.data[x//2:,:])
+    # constmap_v.dataFourier = constmap_v.fourier(constmap_v.data)
+    # constmap_v.name += '_HALF-N-HALF_vert_CONST%s'%str(const)
+    # constmap_h.data[:,:x//2] = const * np.ones_like(flatmap.data[:,:x//2])
+    # constmap_h.data[:,x//2:] = - const * np.ones_like(flatmap.data[:,x//2:])
+    # constmap_h.dataFourier = constmap_h.fourier(constmap_h.data)
+    # constmap_h.name += '_HALF-N-HALF_horz_CONST%s'%str(const)
 
     constmap_4.data[:x//2,:x//2] = const * np.ones_like(flatmap.data[:x//2,:x//2])
     constmap_4.data[x//2:,x//2:] = const * np.ones_like(flatmap.data[x//2:,x//2:])
@@ -167,7 +174,13 @@ def make_halfconst_map(flatmap, const=1.):
     constmap_4.dataFourier = constmap_4.fourier(constmap_4.data)
     constmap_4.name += '_HALF-N-HALF_quad_CONST%s'%str(const)
 
-    return constmap_v, constmap_h, constmap_4
+    # make screened quadrant map
+    corr_map = flatmap.copy()
+    corr_map.data = - constmap_4.data * corr_map.data
+    corr_map.dataFourier = corr_map.fourier()
+    corr_map.name += '_HALF-N-HALF_quad_CONST%s_weighted'%str(const)
+    #return constmap_v, constmap_h, constmap_4
+    return constmap_4, corr_map
 
 def load_flatmap(flatmap_fits):
     print('Loading flatmap file:', flatmap_fits)
@@ -197,7 +210,7 @@ def apply_beam(flatmap, fwhm):
     return beamedmap
 
 def add_noise(flatmap, sens_amin, real_fwhm):
-    print('Adding detector noise with sensitivity: %.2f [muK.rad]'%sens_amin)
+    print('Adding detector noise with sensitivity: %.2f [muK*arcmin]'%sens_amin)
     noisemap = flatmap.copy()
     noisefn = partial(detnoise, sens_amin=sens_amin, real_fwhm=real_fwhm)
     noisemap.dataFourier = noisemap.filterFourierIsotropic(fW=noisefn)
@@ -293,14 +306,17 @@ def main():
         for arg in arg_dict:
             f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
 
-    if args.halfconst_map is not None:
-        hc_map_v, hc_map_h, hc_map_4 = make_halfconst_map(flatmap, const=args.halfconst_map)
-        save_flatmap(hc_map_v, path=args.outpath, save_image=args.save_image)
-        save_flatmap(hc_map_h, path=args.outpath, save_image=args.save_image)
-        save_flatmap(hc_map_4, path=args.outpath, save_image=args.save_image)
     if args.renorm is not None:
-        flatmap = renorm_image(
-            flatmap, target_peak=args.renorm, tau_fwhm=args.tau_fwhm)
+        flatmap = renorm_map(flatmap, target_peak=args.renorm,
+            tau_fwhm=args.tau_fwhm)
+        save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
+
+    if args.halfconst_map is not None:
+        quad_map, flatmap = make_halfconst_map(flatmap, const=args.halfconst_map)
+        # hc_map_v, hc_map_h, hc_map_4 = make_halfconst_map(flatmap, const=args.halfconst_map)
+        #save_flatmap(hc_map_v, path=args.outpath, save_image=args.save_image)
+        #save_flatmap(hc_map_h, path=args.outpath, save_image=args.save_image)
+        save_flatmap(quad_map, path=args.outpath, save_image=args.save_image)
         save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
 
     if args.sub_const is not None:
