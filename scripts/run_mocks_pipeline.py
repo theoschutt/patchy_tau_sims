@@ -143,28 +143,28 @@ def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits, advact_spe
     maplist.append(cmb_lens_map)
 
     # make unlensed CMB GRF + tsz map
-    # fgname =  cmbname+'+tsz'
-    # cmb_fg_map = gen_cmb_fg_map(fg_fits, fgname, cmb_fm=cmbmap)
-    # maplist.append(cmb_fg_map)
+    fgname =  cmbname+'+tsz'
+    cmb_fg_map = gen_cmb_fg_map(fg_fits, fgname, cmb_fm=cmbmap)
+    maplist.append(cmb_fg_map)
 
     # make AdvACT-like CMB (with noise) + tSZ map
-    advact_name = seedname + '_advact-cmb'
-    advact_fgname = advact_name + '+tsz'
-    ell = np.load(os.path.join(advact_spec_dir, 'ells.npy'))
-    cl_tt = np.load(os.path.join(advact_spec_dir, 'cl_tt.npy'))
+    # advact_name = seedname + '_advact-cmb'
+    # advact_fgname = advact_name + '+tsz'
+    # ell = np.load(os.path.join(advact_spec_dir, 'ells.npy'))
+    # cl_tt = np.load(os.path.join(advact_spec_dir, 'cl_tt.npy'))
 
-    advact_map = gen_map_from_curve(ell, cl_tt, cmb, basemap,
-        advact_name, seed=seed)
-    advact_fg_map = gen_cmb_fg_map(fg_fits, advact_fgname, cmb_fm=advact_map)
-    maplist.append(advact_map)
-    maplist.append(advact_fg_map)
+    # advact_map = gen_map_from_curve(ell, cl_tt, cmb, basemap,
+    #     advact_name, seed=seed)
+    # advact_fg_map = gen_cmb_fg_map(fg_fits, advact_fgname, cmb_fm=advact_map)
+    # maplist.append(advact_map)
+    # maplist.append(advact_fg_map)
 
     # save in seed dir
     save_flatmap(cmbmap, seeddir, save_image=False)
     save_flatmap(cmb_lens_map, seeddir, save_image=False)
-    # save_flatmap(cmb_fg_map, seeddir, save_image=False)
-    save_flatmap(advact_map, seeddir, save_image=False)
-    save_flatmap(advact_fg_map, seeddir, save_image=False)
+    save_flatmap(cmb_fg_map, seeddir, save_image=False)
+    # save_flatmap(advact_map, seeddir, save_image=False)
+    # save_flatmap(advact_fg_map, seeddir, save_image=False)
 
     return maplist
 
@@ -259,11 +259,14 @@ def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_lpf_path,
     #              (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
     #              (map_paths[4], tsz_hpf_path)] # CMB+fg LPF x fg HPF
     # [cmbmap, cmb_lens_map, advact_map, advact_fg_map]
+    # map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
+    #              (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
+    #              (map_paths[4], map_paths[5]), # ACT LPF x ACT HPF
+    #              (map_paths[4], tsz_hpf_path), # ACT LPF x fg HPF
+    #              (map_paths[6], tsz_hpf_path)] # ACT+fg LPF x fg HPF
     map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
                  (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
-                 (map_paths[4], map_paths[5]), # ACT LPF x ACT HPF
-                 (map_paths[4], tsz_hpf_path), # ACT LPF x fg HPF
-                 (map_paths[6], tsz_hpf_path)] # ACT+fg LPF x fg HPF
+                 (map_paths[4], tsz_hpf_path)] # CMB+fg LPF x fg HPF
     # suffixes for thumbstack naming
     # map_suffix = ['_cmb-lpf_cmb-hpf',
     #               '_cmb-lpf_cmb+lens-hpf',
@@ -273,11 +276,14 @@ def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_lpf_path,
     #               '_cmb-lpf_cmb+lens-hpf',
     #               '_cmb+lens-lpf_cmb+lens-hpf',
     #               '_cmb+tsz-lpf_tsz-hpf']
+#     map_suffix = ['_cmb-lpf_cmb-hpf',
+#                   '_lens-cmb-lpf_lens-cmb-hpf',
+#                   '_advact-lpf_advact-hpf',
+#                   '_advact-lpf_tsz-hpf',
+#                   '_advact+tsz-lpf_tsz-hpf']
     map_suffix = ['_cmb-lpf_cmb-hpf',
-                  '_lens-cmb-lpf_lens-cmb-hpf',
-                  '_advact-lpf_advact-hpf',
-                  '_advact-lpf_tsz-hpf',
-                  '_advact+tsz-lpf_tsz-hpf']
+                  '_cmb+lens-lpf_cmb+lens-hpf',
+                  '_cmb+tsz-lpf_tsz-hpf']
 
     # build dictionaries for the nested all_stack_dict
     seed_dict = {}
@@ -343,29 +349,11 @@ def main():
     runname, rundir = setup_run_dir(args)
     write_log(args, os.path.join(rundir, runname))
 
-#     jobs = []
-#     for i in range(args.nmocks):
-#         seed = 100 + i
-#         jobs.append(
-#             joblib.delayed(end2end)(
-#                 args,
-#                 kappa_fits,
-#                 tsz_fits,
-#                 tsz_hpf_path,
-#                 runname,
-#                 rundir,
-#                 seed
-#             )
-#         )
-#
-#     parallel = joblib.Parallel(n_jobs=args.njobs, return_as="generator", verbose=10)
-#     results_generator = parallel(jobs)
-
     u, galcat = setup_for_ts(args.test)
 
     # we'll store all the stacked profiles in a dict
     # 1st level: seed
-    # 2nd level: 4 thumbstack types (cmb-cmb, cmb-cmb+lens etc)
+    # 2nd level: n thumbstack types (cmb-cmb, cmb-cmb+lens etc)
     # 3rd level: TI, sgn estimators
     # 4th level: stackedProfile, sStackedProfile
     # 3-4th levels already get made in thumbstack processing
