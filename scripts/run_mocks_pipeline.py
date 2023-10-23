@@ -5,12 +5,13 @@ import fitsio
 import sharedmem
 import queue
 import pickle
+import numpy as np
 
 sys.path.append('../../ThumbStack')
 from catalog import Catalog
 from thumbstack import ThumbStack
 
-from make_noise_maps import make_map, make_cmb, gen_map_from_fn, gen_cmb_fg_map
+from make_noise_maps import make_map, make_cmb, gen_map_from_fn, gen_cmb_fg_map, gen_map_from_curve
 from filter_tau_map import apply_beam, apply_filtering, save_flatmap
 from run_thumbstack import initialize, setup_maps
 
@@ -70,16 +71,25 @@ def setup_fixed_dirs():
         'tSZmap_0.88arcminGauss_multiplicativefact1.3_correlatedwithTaumap_cmass_10x10_image.fits'
     )
 
+    fg_lpf_path = os.path.join(
+        fg_dir,
+        'tSZ_sig0.88_x1.3_corr-w-tau',
+        'tSZ_sig0.88_x1.3_corr-w-tau_beam1.6_lpf2075w_flatmap.fits'
+    )
+
+
     fg_hpf_path = os.path.join(
         fg_dir,
         'tSZ_sig0.88_x1.3_corr-w-tau',
-        'tSZ_sig0.88_x1.3_corr-w-tau_beam1.6_flatmap.fits'
+        'tSZ_sig0.88_x1.3_corr-w-tau_beam1.6_hpf2425w_flatmap.fits'
     )
 
-    return kappa_fits, fg_fits, fg_hpf_path
+    advact_spec_dir = '/home/theo/Documents/research/CMB/patchy_tau_sims/data/AdvACT_NILC_cls_fullRes_TT'
+
+    return kappa_fits, fg_fits, fg_lpf_path, fg_hpf_path, advact_spec_dir
 
 def setup_run_dir(args):
-    runname = 'tsz+lens_%imocks'%args.nmocks
+    runname = 'hi-tsz+lens_nopixbug_%imocks'%args.nmocks
 
     if args.equalsignedweights:
         runname += '_eqsgn'
@@ -108,18 +118,19 @@ def setup_seed_dir(rundir, runname, seed):
 
     return seedname, seeddir
 
-def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits):
+def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits, advact_spec_dir):
     """generates and saves CMB GRF map, same GRF lensed by the `kappa_fits` kappa map,
     and the unlensed GRF plus the `fg_fits` FG map"""
 
     # make base flatmap for all map generation
     basemap = make_map()
-
+    maplist = []
     # make unlensed CMB GRF map
     cmb = make_cmb()
     Ctot = lambda l: cmb.funlensedTT(l)
     cmbname = seedname + '_cmb'
     cmbmap = gen_map_from_fn(Ctot, cmb, basemap, cmbname, seed=seed)
+    maplist.append(cmbmap)
 
     # make lensed CMB GRF
     lensname = cmbname + '+lens'
@@ -129,24 +140,40 @@ def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits):
     cmb_lens_map.data = cmbmap.doLensing(kappaFourier=kappaFourier)
     cmb_lens_map.dataFourier = cmb_lens_map.fourier()
     cmb_lens_map.name = lensname
+    maplist.append(cmb_lens_map)
 
     # make unlensed CMB GRF + tsz map
-    fgname =  cmbname+'+tsz'
-    cmb_fg_map = gen_cmb_fg_map(fg_fits, fgname, cmb_fm=cmbmap)
+    # fgname =  cmbname+'+tsz'
+    # cmb_fg_map = gen_cmb_fg_map(fg_fits, fgname, cmb_fm=cmbmap)
+    # maplist.append(cmb_fg_map)
+
+    # make AdvACT-like CMB (with noise) + tSZ map
+    advact_name = seedname + '_advact-cmb'
+    advact_fgname = advact_name + '+tsz'
+    ell = np.load(os.path.join(advact_spec_dir, 'ells.npy'))
+    cl_tt = np.load(os.path.join(advact_spec_dir, 'cl_tt.npy'))
+
+    advact_map = gen_map_from_curve(ell, cl_tt, cmb, basemap,
+        advact_name, seed=seed)
+    advact_fg_map = gen_cmb_fg_map(fg_fits, advact_fgname, cmb_fm=advact_map)
+    maplist.append(advact_map)
+    maplist.append(advact_fg_map)
 
     # save in seed dir
     save_flatmap(cmbmap, seeddir, save_image=False)
     save_flatmap(cmb_lens_map, seeddir, save_image=False)
-    save_flatmap(cmb_fg_map, seeddir, save_image=False)
+    # save_flatmap(cmb_fg_map, seeddir, save_image=False)
+    save_flatmap(advact_map, seeddir, save_image=False)
+    save_flatmap(advact_fg_map, seeddir, save_image=False)
 
-    return cmbmap, cmb_lens_map, cmb_fg_map
+    return maplist
 
-def gen_filtered_maps(cmbmap, cmb_lens_map, cmb_fg_map, seeddir):
+def gen_filtered_maps(maplist, seeddir):
     """applies LPF, HPF filtering, saves these new maps in the seeddir.
     @return the list of directory paths for these maps"""
 
     map_paths = []
-    for cmap in [cmbmap, cmb_lens_map, cmb_fg_map]:
+    for cmap in maplist:
         beamedmap = apply_beam(cmap, 1.6)
         lpfmap, hpfmap = apply_filtering(beamedmap, filter_type='will')
         lpfpath = save_flatmap(lpfmap, path=seeddir, save_image=False)
@@ -173,51 +200,48 @@ def setup_for_ts(test):
 
     return u, galcat
 
-def run_thumbstack(args, t_large_map, t_small_map):
-    """run thumbstack on one pair of maps"""
+# def run_thumbstack(args, t_large_map, t_small_map):
+#     """run thumbstack on one pair of maps"""
+#
+#     lpf_enmap, hpf_enmap, boxmask = setup_maps(t_large_map, t_small_map)
+#
+#     # run thumbstack, no bootstrap,
+#     # outdirs: seeddir/output/thumbstack, seeddir/figures/thumbstack
+#     print('--------------------------------------------------------------------------------')
+#     print('Beginning thumbstack:', tsname)
+#     print('--------------------------------------------------------------------------------')
+#     ts = ThumbStack(
+#         u,
+#         galcat,
+#         hpf_enmap,
+#         boxmask,
+#         cmbHit=None,
+#         cmbMap2=lpf_enmap,
+#         name=tsname,
+#         save=True,
+#         nProc=1, # we're parallelizing over seeds
+#                  # so each seed needs to use only one thread
+#         filterTypes='tauring',
+#         estimatorTypes=['tau_ti_uniformweight', 'tau_sgn_uniformweight'],
+#         doBootstrap=False,
+#         tLargeMin=args.t_large_min,
+#         equalSignedWeights=args.equalsignedweights,
+#         workDir=seeddir,
+#         runEndToEnd=True,
+#         test=False,
+#         doStackedMap=False,
+#     )
 
-    lpf_enmap, hpf_enmap, boxmask = setup_maps(t_large_map, t_small_map)
-
-    # run thumbstack, no bootstrap,
-    # outdirs: seeddir/output/thumbstack, seeddir/figures/thumbstack
-    print('--------------------------------------------------------------------------------')
-    print('Beginning thumbstack:', tsname)
-    print('--------------------------------------------------------------------------------')
-    ts = ThumbStack(
-        u,
-        galcat,
-        hpf_enmap,
-        boxmask,
-        cmbHit=None,
-        cmbMap2=lpf_enmap,
-        name=tsname,
-        save=True,
-        nProc=1, # we're parallelizing over seeds
-                 # so each seed needs to use only one thread
-        filterTypes='tauring',
-        estimatorTypes=['tau_ti_uniformweight', 'tau_sgn_uniformweight'],
-        doBootstrap=False,
-        tLargeMin=args.t_large_min,
-        equalSignedWeights=args.equalsignedweights,
-        workDir=seeddir,
-        runEndToEnd=True,
-        test=False,
-        doStackedMap=False,
-    )
-
-
-
-def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path, runname, rundir, seed):
+def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_lpf_path, tsz_hpf_path, advact_spec_dir, runname, rundir, seed):
     """runs pipeline for a single seed"""
 
     seedname, seeddir = setup_seed_dir(rundir, runname, seed)
 
     # TODO: add branch to skip map generation, just return
     # paths to relevant maps
-    cmbmap, cmb_lens_map, cmb_tsz_map = gen_unfiltered_maps(
-        seed, seedname, seeddir, kappa_fits, tsz_fits)
+    maplist = gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, tsz_fits, advact_spec_dir)
 
-    map_paths = gen_filtered_maps(cmbmap, cmb_lens_map, cmb_tsz_map, seeddir)
+    map_paths = gen_filtered_maps(maplist, seeddir)
     print('map_paths:\n', map_paths)
     #map_paths scheme:
     # [CMB LPF, CMB HPF,
@@ -230,19 +254,30 @@ def end2end(args, all_stack_dict, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path,
     #              (map_paths[0], tsz_hpf_path),  # CMB LPF    x fg HPF
     #              (map_paths[2], tsz_hpf_path)]  # CMB+fg LPF x fg HPF
     # not sure about these indices above... let's redo lensing and CMBxfg
+    # map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
+    #              (map_paths[0], map_paths[3]), # CMB LPF x lensCMB HPF
+    #              (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
+    #              (map_paths[4], tsz_hpf_path)] # CMB+fg LPF x fg HPF
+    # [cmbmap, cmb_lens_map, advact_map, advact_fg_map]
     map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
-                 (map_paths[0], map_paths[3]), # CMB LPF x lensCMB HPF
                  (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
-                 (map_paths[4], tsz_hpf_path)] # CMB+fg LPF x fg HPF
+                 (map_paths[4], map_paths[5]), # ACT LPF x ACT HPF
+                 (map_paths[4], tsz_hpf_path), # ACT LPF x fg HPF
+                 (map_paths[6], tsz_hpf_path)] # ACT+fg LPF x fg HPF
     # suffixes for thumbstack naming
     # map_suffix = ['_cmb-lpf_cmb-hpf',
     #               '_cmb-lpf_cmb+lens-hpf',
     #               '_cmb-lpf_tsz-hpf',
     #               '_cmb+tsz-lpf_tsz-hpf']
+    # map_suffix = ['_cmb-lpf_cmb-hpf',
+    #               '_cmb-lpf_cmb+lens-hpf',
+    #               '_cmb+lens-lpf_cmb+lens-hpf',
+    #               '_cmb+tsz-lpf_tsz-hpf']
     map_suffix = ['_cmb-lpf_cmb-hpf',
-                  '_cmb-lpf_cmb+lens-hpf',
-                  '_cmb+lens-lpf_cmb+lens-hpf',
-                  '_cmb+tsz-lpf_tsz-hpf']
+                  '_lens-cmb-lpf_lens-cmb-hpf',
+                  '_advact-lpf_advact-hpf',
+                  '_advact-lpf_tsz-hpf',
+                  '_advact+tsz-lpf_tsz-hpf']
 
     # build dictionaries for the nested all_stack_dict
     seed_dict = {}
@@ -304,7 +339,7 @@ def main():
     print(args)
 
     # same for all seeds
-    kappa_fits, tsz_fits, tsz_hpf_path = setup_fixed_dirs()
+    kappa_fits, tsz_fits, tsz_lpf_path, tsz_hpf_path, advact_spec_dir = setup_fixed_dirs()
     runname, rundir = setup_run_dir(args)
     write_log(args, os.path.join(rundir, runname))
 
@@ -344,7 +379,9 @@ def main():
             galcat,
             kappa_fits,
             tsz_fits,
+            tsz_lpf_path,
             tsz_hpf_path,
+            advact_spec_dir,
             runname,
             rundir,
             seed

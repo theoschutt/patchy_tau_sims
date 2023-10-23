@@ -170,7 +170,23 @@ def gen_map_from_fn(powspec_fn, cmb, flat_map, name, lMin=30., lMax=10000., seed
 
     return this_cmb_map
 
-def gen_map_from_curve(ell, f, cmb, flat_map, name, seed=42):
+def gen_map_from_data_powspec(ell, Cell, cmb, flat_map, name, seed=42):
+    print('Generating map')
+    # reinterpolate: gain factor 10 in speed
+    cmb.fCtotal = interp1d(ell, Cell, kind='linear', bounds_error=False, fill_value=0.)
+
+    # make map data
+    this_cmb_map = flat_map.copy()
+    this_cmb_map.dataFourier = this_cmb_map.genGRF(cmb.fCtotal, seed=seed, test=False)
+    this_cmb_map.data = this_cmb_map.inverseFourier()
+    this_cmb_map.name = name
+
+    return this_cmb_map
+
+def gen_cmb_from_noise_curve(ell, f, cmb, flat_map, name, seed=42):
+    """this adds a lensed and beamed CMB power spectrum to the noise spectrum
+    and then generates a realization from this summed PS.
+    """
     print('Generating map')
     # reinterpolate: gain factor 10 in speed
     # first interpolate lensed CMB

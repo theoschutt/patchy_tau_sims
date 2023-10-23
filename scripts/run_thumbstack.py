@@ -59,7 +59,8 @@ def parse_args():
         help=('Choose thumbstack estimator and weight'
               ' (can be string or list of strings)'))
     parser.add_argument('--dobootstrap',
-        default=True,
+        action='store_const', const=True,
+        default=False,
         help='Boolean whether to compute bootstrap covariance')
     parser.add_argument('--dostackmap',
         action='store_const', const=True,

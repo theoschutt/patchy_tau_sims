@@ -53,6 +53,10 @@ def parse_args():
                         help='Noise in uK*arcmin to apply to map')
     parser.add_argument('--filter_type', default='will',
             help='Choose lpf/hpf functions (`theo` or `will`) [default: will]')
+    parser.add_argument('--ell_max',
+                        default=5950,
+                        type=int,
+                        help='cutoff for maximum ell in the high-pass filtered map. [default: 5950]')
     parser.add_argument('--lpf_loc',
                         default=1000,
                         type=int,
@@ -108,6 +112,9 @@ def lpf_will(ell):
     hi_filt = np.zeros_like(hi_ell)
     tot_filt = np.concatenate([low_filt, mid_filt, hi_filt])
     return tot_filt
+
+def apply_ell_max(ell, ell_max):
+    return ell <= ell_max
 
 def make_basemap(sizeX=10., sizeY=10., pixel_scale=0.5):
     # sizeX, sizeY: map dimensions in degrees
@@ -219,7 +226,8 @@ def add_noise(flatmap, sens_amin, real_fwhm):
 
     return noisemap
 
-def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, width=100.):
+def apply_filtering(flatmap, filter_type='theo', ell_max=5950., lpf_loc=1000,
+    hpf_loc=1500, width=100.):
     if filter_type == 'theo':
         lpf = partial(low_pass, loc=lpf_loc, width=width)
         hpf = partial(high_pass, loc=hpf_loc, width=width)
@@ -251,6 +259,15 @@ def apply_filtering(flatmap, filter_type='theo', lpf_loc=1000, hpf_loc=1500, wid
     elif filter_type == 'will':
         lpf_map.name += '_lpf2075w'
         hpf_map.name += '_hpf2425w'
+
+    if ell_max is not None:
+        #ell_max_filter = emf
+        emf = partial(apply_ell_max, ell_max=ell_max)
+        filtFourier_maxfilt = hpf_map.filterFourierIsotropic(fW=emf)
+        filtData_maxfilt = hpf_map.inverseFourier(filtFourier_maxfilt)
+        hpf_map.data = filtData_maxfilt
+        hpf_map.dataFourier = filtFourier_maxfilt
+        hpf_map.name += '_lmax%i'%ell_max
 
     return lpf_map, hpf_map
 
@@ -333,8 +350,8 @@ def main():
         flatmap = add_noise(flatmap, sens_amin=args.sensitivity, real_fwhm=args.beam_fwhm)
         save_flatmap(flatmap, path=args.outpath, save_image=args.save_image)
 
-    lpf_map, hpf_map = apply_filtering(flatmap, args.filter_type, args.lpf_loc,
-                                       args.hpf_loc, args.filter_width)
+    lpf_map, hpf_map = apply_filtering(flatmap, args.filter_type,
+        args.ell_max, args.lpf_loc, args.hpf_loc, args.filter_width)
     save_flatmap(lpf_map, path=args.outpath, save_image=args.save_image)
     save_flatmap(hpf_map, path=args.outpath, save_image=args.save_image)
 
