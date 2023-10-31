@@ -85,7 +85,8 @@ def compute_stack(t_small, t_large, t_large_norm, est, t_large_min, balance_sign
     stack = norm * np.sum(t_small * weights, axis=0)
     sStack = norm * np.sqrt(np.sum(s2Full * weights**2, axis=0))
 
-    print(stack, sStack)
+    print('s2Full, stack, sStack:', s2Full, stack, sStack)
+    print('s2Full, stack, sStack shape:', s2Full.shape, stack.shape, sStack.shape)
     return stack, sStack
 
 def load_photometry(t_small_fn, t_large_fn, t_large_norm_fn):
