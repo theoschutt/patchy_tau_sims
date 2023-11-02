@@ -63,35 +63,32 @@ def setup_fixed_dirs():
         'kappamap_0.53arcminGauss_correlatedwithTaumap_cmass_10x10_image.fits'
     )
 
-    # fg_fits = os.path.join(
-    #     fg_dir,
-    #     'tSZmap_0.88arcminGauss_multiplicativefact1.3_correlatedwithTaumap_cmass_10x10_image.fits'
-    # )
     fg_fits = os.path.join(
         fg_dir,
-        'tSZmap_2.46arcminGauss_correlatedwithTaumap_cmass_10x10_image.fits'
+        'tSZmap_0.88arcminGauss_multiplicativefact1.3_correlatedwithTaumap_cmass_10x10_image.fits'
     )
-
-
-    # fg_hpf_path = os.path.join(
+    # fg_fits = os.path.join(
     #     fg_dir,
-    #     'tSZ_sig0.88_x1.3_corr-w-tau',
-    #     'tSZ_sig0.88_x1.3_corr-w-tau_beam1.6_hpf2425w_flatmap.fits'
+    #     'tSZmap_2.46arcminGauss_correlatedwithTaumap_cmass_10x10_image.fits'
     # )
-
 
     fg_hpf_path = os.path.join(
         fg_dir,
-        'tSZ_sig2.46_corr-w-tau',
-        'tSZ_sig2.46_corr-w-tau_beam1.6_hpf2425w_lmax5950_flatmap.fits'
+        'tSZ_sig0.88_x1.3_corr-w-tau',
+        'tSZ_sig0.88_x1.3_corr-w-tau_beam1.6_hpf2425w_flatmap.fits'
     )
+    # fg_hpf_path = os.path.join(
+    #     fg_dir,
+    #     'tSZ_sig2.46_corr-w-tau',
+    #     'tSZ_sig2.46_corr-w-tau_beam1.6_hpf2425w_lmax5950_flatmap.fits'
+    # )
 
     # advact_spec_dir = '/home/theo/Documents/research/CMB/patchy_tau_sims/data/AdvACT_NILC_cls_fullRes_TT'
 
     return kappa_fits, fg_fits, fg_hpf_path
 
 def setup_run_dir(args):
-    runname = 'lo-tsz_final_%imocks'%args.nmocks
+    runname = 'hi-tsz+lens_final_v2_%imocks'%args.nmocks
 
     if args.equalsignedweights:
         runname += '_eqsgn'
@@ -132,17 +129,17 @@ def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits):
     Ctot = lambda l: cmb.funlensedTT(l)
     cmbname = seedname + '_cmb'
     cmbmap = gen_map_from_fn(Ctot, cmb, basemap, cmbname, seed=seed)
-    # maplist.append(cmbmap)
+    maplist.append(cmbmap)
 
     # make lensed CMB GRF
-    # lensname = cmbname + '+lens'
-    # kappaData = fitsio.read(kappa_fits)
-    # kappaFourier = cmbmap.fourier(kappaData)
-    # cmb_lens_map = basemap.copy()
-    # cmb_lens_map.data = cmbmap.doLensing(kappaFourier=kappaFourier)
-    # cmb_lens_map.dataFourier = cmb_lens_map.fourier()
-    # cmb_lens_map.name = lensname
-    # maplist.append(cmb_lens_map)
+    lensname = cmbname + '+lens'
+    kappaData = fitsio.read(kappa_fits)
+    kappaFourier = cmbmap.fourier(kappaData)
+    cmb_lens_map = basemap.copy()
+    cmb_lens_map.data = cmbmap.doLensing(kappaFourier=kappaFourier)
+    cmb_lens_map.dataFourier = cmb_lens_map.fourier()
+    cmb_lens_map.name = lensname
+    maplist.append(cmb_lens_map)
 
     # make unlensed CMB GRF + tsz map
     fgname =  cmbname+'+tsz'
@@ -162,8 +159,8 @@ def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits):
     # maplist.append(advact_fg_map)
 
     # save in seed dir
-    # save_flatmap(cmbmap, seeddir, save_image=False)
-    # save_flatmap(cmb_lens_map, seeddir, save_image=False)
+    save_flatmap(cmbmap, seeddir, save_image=False)
+    save_flatmap(cmb_lens_map, seeddir, save_image=False)
     save_flatmap(cmb_fg_map, seeddir, save_image=False)
     # save_flatmap(advact_map, seeddir, save_image=False)
     # save_flatmap(advact_fg_map, seeddir, save_image=False)
@@ -180,8 +177,8 @@ def gen_filtered_maps(maplist, seeddir):
         lpfmap, hpfmap = apply_filtering(beamedmap, filter_type='will')
         lpfpath = save_flatmap(lpfmap, path=seeddir, save_image=False)
         map_paths.append(lpfpath)
-        # hpfpath = save_flatmap(hpfmap, path=seeddir, save_image=False)
-        # map_paths.append(hpfpath)
+        hpfpath = save_flatmap(hpfmap, path=seeddir, save_image=False)
+        map_paths.append(hpfpath)
 
     return map_paths
 
@@ -239,7 +236,12 @@ def end2end(args, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path, runname, rundir
     #              (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
     #              (map_paths[4], tsz_hpf_path)] # CMB+fg LPF x fg HPF
     # for low-tsz run
-    map_pairs = [(map_paths[0], tsz_hpf_path)] # CMB+fg LPF x fg HPF
+    # map_pairs = [(map_paths[0], tsz_hpf_path)] # CMB+fg LPF x fg HPF
+
+    # for 1000 mocks run
+    map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
+                 (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
+                 (map_paths[4], map_paths[5])] # CMB+fg LPF x CMB+fg HPF
 
     # suffixes for thumbstack naming
     # map_suffix = ['_cmb-lpf_cmb-hpf',
@@ -259,8 +261,13 @@ def end2end(args, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path, runname, rundir
 #     map_suffix = ['_cmb-lpf_cmb-hpf',
 #                   '_cmb+lens-lpf_cmb+lens-hpf',
 #                   '_cmb+tsz-lpf_tsz-hpf']
-    map_suffix = ['_cmb+tsz-lpf_tsz-hpf']
+    # for lo-tsz_final_100mocks
+    # map_suffix = ['_cmb+tsz-lpf_tsz-hpf']
 
+    # for hi-tsz_final_v2_1000mocks
+    map_suffix = ['_cmb-lpf_cmb-hpf',
+                  '_cmb+lens-lpf_cmb+lens-hpf',
+                  '_cmb+tsz-lpf_cmb+tsz-hpf']
 
     # build dictionaries for the nested all_stack_dict
     seed_dict = {}
