@@ -58,7 +58,7 @@ def parse_args():
 
     return args
 
-def plot_signal_curve(data_txt_list, fn, title, labels, lss):
+def plot_signal_data(data_txt_list, fn, title, labels, lss):
     fig, ax = plt.subplots(1,1, figsize=(10,5))
     # labels = ['tSZ TI', 'tSZ Sgn']
     # labels = ['kSZ TI', 'kSZ Sgn']
@@ -73,23 +73,15 @@ def plot_signal_curve(data_txt_list, fn, title, labels, lss):
     colors = ['#17685f', '#b33210', 'k', 'r', 'c']
     # lss = ['-', '-', '--', '--', '--']
 
-    rad2arcmin = 180. * 60. / np.pi
+    areas = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_filtarea.txt')[0,:]
 
     for i, txt in enumerate(data_txt_list):
         print(txt)
         dat = np.genfromtxt(txt)
         r = dat[:,0]
-        t = dat[:,1] * rad2arcmin**2
-        t_err = dat[:,2] * rad2arcmin**2
+        t = dat[:,1]
+        t_err = dat[:,2]
 
-        # divide by ring area to get mean tau
-        areas = r.copy()
-        for j in range(len(r)):
-            if j == 0:
-                areas[j] = np.pi * r[j]**2
-            else:
-                areas[j] = np.pi * (r[j]**2 - r[j-1]**2)
-        print(areas)
         t /= areas
         t_err /= areas
 
@@ -97,6 +89,80 @@ def plot_signal_curve(data_txt_list, fn, title, labels, lss):
         ax.set_ylabel(r'$\left<\tau\right>$')
         ax.set_xlabel('Radius [arcmin]')
         ax.legend(framealpha=1., loc='upper right')
+
+    plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
+    plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
+
+def plot_signal_curves(data_txt_list, fn, title, labels, lss):
+    fig, ax = plt.subplots(1,1, figsize=(10,5))
+    # labels = ['tSZ TI', 'tSZ Sgn']
+    # labels = ['kSZ TI', 'kSZ Sgn']
+    # labels = ['CIB TI', 'CIB Sgn']
+    # labels = ['TI', 'Sgn', r'TI, +=-', r'Sgn, +=-']
+    # labels = ['TI', 'Sgn', r'TI, |T_L| > 2\mu$K', r'Sgn, |T_L| > 2\mu$K']
+    ax.set_title(title)
+
+#     labels = [r'$\tau$ TI', 'tSZ TI', 'kSZ TI', 'CIB TI', 'AdvACT spectrum']
+    # labels = [r'$\tau$ Sgn', 'tSZ Sgn', 'kSZ Sgn', 'CIB Sgn', 'AdvACT spectrum']
+    # colors = ['k', 'r', 'b', 'orange', 'c']
+    colors = ['b', 'g', 'orange']
+    # lss = ['-', '-', '--', '--', '--']
+
+    areas = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_filtarea.txt')[0,:]
+
+    for i, txt in enumerate(data_txt_list):
+        print(txt)
+        dat = np.genfromtxt(txt)
+        r = dat[:,0]
+        t = dat[:,1]
+        t_err = dat[:,2]
+
+        # divide by ring area to get mean tau
+        t /= areas
+        t_err /= areas
+
+        ax.plot(r+i*0.01, t, label=labels[i], c=colors[i], ls=lss[i])
+        ax.set_ylabel(r'$\left<(\tau)\right>$')
+        ax.set_xlabel('Radius [arcmin]')
+        ax.legend(framealpha=1.)
+
+    plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
+    plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
+
+
+def plot_noise_curves(data_txt_list, fn, title, labels, lss):
+    fig, ax = plt.subplots(1,1, figsize=(10,5))
+    # labels = ['tSZ TI', 'tSZ Sgn']
+    # labels = ['kSZ TI', 'kSZ Sgn']
+    # labels = ['CIB TI', 'CIB Sgn']
+    # labels = ['TI', 'Sgn', r'TI, +=-', r'Sgn, +=-']
+    # labels = ['TI', 'Sgn', r'TI, |T_L| > 2\mu$K', r'Sgn, |T_L| > 2\mu$K']
+    ax.set_title(title)
+
+#     labels = [r'$\tau$ TI', 'tSZ TI', 'kSZ TI', 'CIB TI', 'AdvACT spectrum']
+    # labels = [r'$\tau$ Sgn', 'tSZ Sgn', 'kSZ Sgn', 'CIB Sgn', 'AdvACT spectrum']
+    # colors = ['k', 'r', 'b', 'orange', 'c']
+    colors = ['b', 'r', 'g', 'orange']
+    # lss = ['-', '-', '--', '--', '--']
+
+    areas = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_filtarea.txt')[0,:]
+
+    for i, txt in enumerate(data_txt_list):
+        print(txt)
+        dat = np.genfromtxt(txt)
+        r = dat[:,0]
+        t = dat[:,1]
+        t_err = dat[:,2]
+
+        # divide by ring area to get mean tau
+        t /= areas
+        t_err /= areas
+
+        ax.plot(r+i*0.01, t_err, label=labels[i], c=colors[i], ls=lss[i])
+        ax.set_ylabel(r'$\left<\sigma\tau\right>$')
+        ax.set_xlabel('Radius [arcmin]')
+        ax.legend(framealpha=1.)
+
     plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
     plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
 
@@ -125,9 +191,7 @@ def plot_signal_with_noise_band(data_txt_list, noise_txt_list, fn, title, labels
     # tau_dat = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10s10_tau-fwhm_renorm2.45e-4_v3_c-1.0_willfilt/tauring_tau_ti_uniformweight_measured.txt')
     tau_dat = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_tau_ti_uniformweight_measured.txt')
     areas = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_filtarea.txt')[0,:]
-    print(areas)
     areas *= rad2arcmin**2
-    print(areas)
     r = tau_dat[:,0]
     plot_r = r.copy()
     plot_r[0] -= 0.1
@@ -219,8 +283,26 @@ def plot_signal_with_noise_band(data_txt_list, noise_txt_list, fn, title, labels
     plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
     plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
 
-def plot_noise_curves(data_txt_list, fn):
-    pass
+# def plot_signal_vs_expt(data_txt_list, noise_txt_list, fn, title, labels, lss):
+# 
+#     ax.axhline(0, c='k', alpha=0.8, lw=1., zorder=30, ls=':')
+#     # plot signal curves
+#     for i, txt in enumerate(data_txt_list):
+#         print(txt)
+#         dat = np.genfromtxt(txt)
+#         r = dat[:,0]
+#         t = dat[:,1] * rad2arcmin**2 / areas
+#         t_err = dat[:,2] * rad2arcmin**2 / areas
+# 
+#         ax.errorbar(r+i*0.05 - 0.025, t, t_err, label="%s bias"%labels[i], fmt=formats[i], c=colors[i], markeredgecolor=colors[i], lw=1.5, markersize=6, markeredgewidth=1.5, markerfacecolor='white', zorder=1)
+# 
+#     # plot noise curves
+#     for i, noise in  enumerate(noise_txt_list):
+#         print(noise)
+#         noise_dat = np.genfromtxt(noise)
+#         noise_err = noise_dat[:,2] * rad2arcmin**2 / areas
+# 
+#         ax.fill_between(plot_r, -noise_err, noise_err, color=colors[i], alpha=0.2, label="%s stat err"%labels[i], zorder=12-i)
 
 def plot_signal_ratios(data_txt_list, fn, title, labels, lss):
     fig, ax = plt.subplots(1,1, figsize=(10,5))
@@ -281,13 +363,13 @@ def main():
     write_log(args, args.outfile)
 
     if args.plot_type == 'signal':
-        plot_signal_curve(args.data_files, args.outfile, args.title, args.labels, args.ls)
+        plot_signal_curves(args.data_files, args.outfile, args.title, args.labels, args.ls)
 
-    if args.plot_type == 'signal-band':
+    elif args.plot_type == 'signal-band':
         plot_signal_with_noise_band(args.data_files, args.noise_files, args.outfile, args.title, args.labels, args.ls)
 
     elif args.plot_type == 'noise':
-        plot_noise_curves(args.data_files, args.outfile)
+        plot_noise_curves(args.noise_files, args.outfile, args.title, args.labels, args.ls)
 
     elif args.plot_type == 'tau_ratio':
         plot_signal_ratios(args.data_files, args.outfile, args.title, args.labels, args.ls)
