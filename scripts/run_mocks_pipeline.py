@@ -2,13 +2,14 @@
 import os,sys
 import pickle
 import sharedmem
+import numpy as np
 import fitsio
 
 sys.path.append('../../ThumbStack')
 from catalog import Catalog
 from thumbstack import ThumbStack
 
-from make_noise_maps import make_map, make_cmb, gen_map_from_fn, gen_cmb_fg_map
+from make_noise_maps import make_map, make_cmb, gen_map_from_fn, gen_cmb_fg_map, gen_map_from_data_powspec
 from filter_tau_map import apply_beam, apply_filtering, save_flatmap
 from run_thumbstack import initialize, setup_maps
 
@@ -17,6 +18,7 @@ def parse_args():
 
     parser = argparse.ArgumentParser(
         description='Make, filter, and run thumbstack on mock CMB maps.')
+
     parser.add_argument('--nmocks',
         type=int,
         help='Number of mocks to generate and process.')
@@ -30,14 +32,22 @@ def parse_args():
         type=str,
         default='01',
         help='Version tag for directory naming.')
-
+    parser.add_argument('--runname',
+        type=str,
+        help="Run name template for directory naming. Don't include no. of mocks.")
+    parser.add_argument('--catname',
+        type=str,
+        help="Catalog name (i.e. directory at ../output/catalog).")
+    parser.add_argument('--gen_maps',
+        default=False, action='store_const', const=True,
+        help='Generate maps instead of loading presaved ones.')
     parser.add_argument('--test',
         default=False, action='store_const', const=True,
         help='Test script using first 10 objects in catalog')
     parser.add_argument('--t_large_min',
         default=None,
         type=float,
-        help='Minimum abs value temperature for T_large in stack')
+        help='Minimum abs value temperature for T_large in stack. [default: None]')
     parser.add_argument('--equalsignedweights',
         default=False, action='store_const', const=True,
         help='Whether to equalize number of +/- weights')
@@ -56,7 +66,7 @@ def write_log(args, outfile):
             f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
 
 def setup_fixed_dirs():
-    fg_dir = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/fg_maps'
+    fg_dir = '../output/fg_maps'
 
     kappa_fits = os.path.join(
         fg_dir,
@@ -88,7 +98,7 @@ def setup_fixed_dirs():
     return kappa_fits, fg_fits, fg_hpf_path
 
 def setup_run_dir(args):
-    runname = 'hi-tsz+lens_final_v2_%imocks'%args.nmocks
+    runname = f'{args.runname}_{args.nmocks}mocks' # 'hi-tsz+lens_final_v2_%imocks'%args.nmocks
 
     if args.equalsignedweights:
         runname += '_eqsgn'
@@ -99,7 +109,7 @@ def setup_run_dir(args):
     runname += '_'+args.version
 
     rundir = os.path.join(
-        '/home/theo/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs',
+        '../output/multi_mock_runs',
         runname
     )
 
@@ -117,6 +127,29 @@ def setup_seed_dir(rundir, runname, seed):
 
     return seedname, seeddir
 
+def gen_advact_map(seed, seedname, seeddir):
+    """generates and saves a CMB GRF map with the AdvACT NILC power spectrum."""
+
+    print('Loading AdvACT NILC Spectrum.')
+    advact_spec_dir = '/home/groups/roodman/schutt20/cmb/patchy_tau_sims/data/AdvACT_NILC_cls_fullRes_TT'
+    ell = np.load(os.path.join(advact_spec_dir, 'ells.npy'))
+    cl_tt = np.load(os.path.join(advact_spec_dir, 'cl_tt.npy'))
+
+    # make base flatmap for all map generation
+    basemap = make_map()
+    maplist = []
+    # make unlensed CMB GRF map
+    cmb = make_cmb()
+ 
+    advact_name = seedname + '_advact-cmb'
+    advact_map = gen_map_from_data_powspec(ell, cl_tt, cmb, basemap,
+        advact_name, seed=seed)
+
+    # save in seed dir
+    save_flatmap(advact_map, seeddir, save_image=False)
+
+    return [advact_map]
+ 
 def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits):
     """generates and saves CMB GRF map, same GRF lensed by the `kappa_fits` kappa map,
     and the unlensed GRF plus the `fg_fits` FG map"""
@@ -167,13 +200,16 @@ def gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, fg_fits):
 
     return maplist
 
-def gen_filtered_maps(maplist, seeddir):
+def gen_filtered_maps(maplist, seeddir, beam=None):
     """applies LPF, HPF filtering, saves these new maps in the seeddir.
     @return the list of directory paths for these maps"""
 
     map_paths = []
     for cmap in maplist:
-        beamedmap = apply_beam(cmap, 1.6)
+        if beam is not None:
+            beamedmap = apply_beam(cmap, beam)
+        else:
+            beamedmap = cmap
         lpfmap, hpfmap = apply_filtering(beamedmap, filter_type='will')
         lpfpath = save_flatmap(lpfmap, path=seeddir, save_image=False)
         map_paths.append(lpfpath)
@@ -182,7 +218,22 @@ def gen_filtered_maps(maplist, seeddir):
 
     return map_paths
 
-def setup_for_ts(test):
+def get_map_paths(start_seed, seed):
+    """returns the paths to maps already saved in previous runs."""
+# ../output/multi_mock_runs/act-nilc_x_unwise-b+g_10x10_v2_128mocks_eqsgn/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn_0062/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn_0062_seed2000/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn_0062_seed2000_advact-cmb_hpf2425w_lmax5950_flatmap.fits
+    tag = 'act-nilc_x_unwise-b+g_10x10_v2'
+    suffix = '32mocks_eqsgn'
+    in_rundir = f'/home/groups/roodman/schutt20/cmb/patchy_tau_sims/output/multi_mock_runs/{tag}_128mocks_eqsgn'
+    map_seeddir = f'{tag}_{suffix}_{int(start_seed/32):04}/{tag}_{suffix}_{int(start_seed/32):04}_seed{seed}'
+    in_cmbname = f'{tag}_{suffix}_{int(start_seed/32):04}_seed{seed}_advact-cmb'
+    lpfname = in_cmbname + '_lpf2075w'
+    hpfname = in_cmbname + '_hpf2425w_lmax5950'
+    lpf_path = os.path.join(in_rundir, map_seeddir, f'{lpfname}_flatmap.fits')
+    hpf_path = os.path.join(in_rundir, map_seeddir, f'{hpfname}_flatmap.fits')
+
+    return [lpf_path, hpf_path]
+
+def setup_for_ts(catname, test):
     u, massConv = initialize()
 
     if test:
@@ -192,9 +243,9 @@ def setup_for_ts(test):
     galcat = Catalog(
         u,
         massConv,
-        name='cmass_m_10x10_v2',
+        name=catname,
         nObj=nObj,
-        workDir='/home/theo/Documents/research/CMB/patchy_tau_sims'
+        workDir='..'
     )
 
     return u, galcat
@@ -204,12 +255,18 @@ def end2end(args, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path, runname, rundir
 
     seedname, seeddir = setup_seed_dir(rundir, runname, seed)
 
-    # TODO: add branch to skip map generation, just return
-    # paths to relevant maps
-    maplist = gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, tsz_fits)
+    if args.gen_maps:
+        # for bias runs
+        # maplist = gen_unfiltered_maps(seed, seedname, seeddir, kappa_fits, tsz_fits)
+        # map_paths = gen_filtered_maps(maplist, seeddir, beam=1.6)
 
-    map_paths = gen_filtered_maps(maplist, seeddir)
+	# for sim covmat runs
+        maplist = gen_advact_map(seed, seedname, seeddir)
+        map_paths = gen_filtered_maps(maplist, seeddir, beam=None)
+    else:
+        map_paths = get_map_paths(args.start_seed, seed)
     print('map_paths:\n', map_paths)
+
     #map_paths scheme:
     # [CMB LPF, CMB HPF,
     # lensCMB LPF, lensCMB HPF,
@@ -239,35 +296,20 @@ def end2end(args, u, galcat, kappa_fits, tsz_fits, tsz_hpf_path, runname, rundir
     # map_pairs = [(map_paths[0], tsz_hpf_path)] # CMB+fg LPF x fg HPF
 
     # for 1000 mocks run
-    map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
-                 (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
-                 (map_paths[4], map_paths[5])] # CMB+fg LPF x CMB+fg HPF
+    # map_pairs = [(map_paths[0], map_paths[1]), # CMB LPF x CMB HPF
+    #              (map_paths[2], map_paths[3]), # lensCMB LPF x lensCMB HPF
+    #              (map_paths[4], map_paths[5])] # CMB+fg LPF x CMB+fg HPF
+
+    # for unwise and LSST covariance sim runs
+    map_pairs = [(map_paths[0], map_paths[1])] # CMB LPF x CMB HPF
 
     # suffixes for thumbstack naming
     # map_suffix = ['_cmb-lpf_cmb-hpf',
     #               '_cmb-lpf_cmb+lens-hpf',
     #               '_cmb-lpf_tsz-hpf',
     #               '_cmb+tsz-lpf_tsz-hpf']
-    # map_suffix = ['_cmb-lpf_cmb-hpf',
-    #               '_cmb-lpf_cmb+lens-hpf',
-    #               '_cmb+lens-lpf_cmb+lens-hpf',
-    #               '_cmb+tsz-lpf_tsz-hpf']
-#     map_suffix = ['_cmb-lpf_cmb-hpf',
-#                   '_lens-cmb-lpf_lens-cmb-hpf',
-#                   '_advact-lpf_advact-hpf',
-#                   '_advact-lpf_tsz-hpf',
-#                   '_advact+tsz-lpf_tsz-hpf']
-    # for hi-tsz+lens_final_100nmocks
-#     map_suffix = ['_cmb-lpf_cmb-hpf',
-#                   '_cmb+lens-lpf_cmb+lens-hpf',
-#                   '_cmb+tsz-lpf_tsz-hpf']
-    # for lo-tsz_final_100mocks
-    # map_suffix = ['_cmb+tsz-lpf_tsz-hpf']
-
-    # for hi-tsz_final_v2_1000mocks
-    map_suffix = ['_cmb-lpf_cmb-hpf',
-                  '_cmb+lens-lpf_cmb+lens-hpf',
-                  '_cmb+tsz-lpf_cmb+tsz-hpf']
+    # for unwise and LSST covariance sim runs
+    map_suffix = ['_cmb-lpf_cmb-hpf']
 
     # build dictionaries for the nested all_stack_dict
     seed_dict = {}
@@ -329,7 +371,7 @@ def main():
     runname, rundir = setup_run_dir(args)
     write_log(args, os.path.join(rundir, runname))
 
-    u, galcat = setup_for_ts(args.test)
+    u, galcat = setup_for_ts(args.catname, args.test)
 
     # we'll store all the stacked profiles in a dict
     # 1st level: seed

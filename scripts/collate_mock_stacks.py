@@ -2,15 +2,19 @@
 import os
 import glob
 import numpy as np
-
-MOCKS_DIR = ('/home/theo/Documents/research/CMB/patchy_tau_sims/'
-             'output/multi_mock_runs/lo-tsz_final_200mocks_eqsgn/')
+# ../output/multi_mock_runs/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn_0064/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn_0064_seed2074/output/thumbstack/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn_0064_seed2074_cmb-lpf_cmb-hpf/
+MOCKS_DIR = ('../output/multi_mock_runs/act-nilc_x_unwise-b+g_10x10_v2_32mocks_eqsgn')
+# MOCKS_DIR = ('../output/multi_mock_runs/unwise_blue+green_10x10_v2_eqsgn_128mocks')
+# MOCKS_DIR = ('/home/theo/Documents/research/CMB/patchy_tau_sims/'
+#              'output/multi_mock_runs/lo-tsz_final_200mocks_eqsgn/')
 
 # MOCKS_DIR = ('/home/theo/Documents/research/CMB/patchy_tau_sims/'
 #              'output/multi_mock_runs/hi-tsz+lens_final_200mocks_eqsgn/')
 # MOCKS_DIR_2 = ('/media/theo/1TB_WD_Passport/2023_ubuntu_backup/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/hi-tsz+lens_100mocks_eqsgn')
-# TAG = 'hi-tsz+lens_final'
-TAG = 'lo-tsz_final'
+TAG = 'act-nilc_x_unwise-b+g_10x10_v2'
+#TAG = 'unwise_blue+green_10x10_v2_32_eqsgn'
+# TAG = 'hi-tsz+lens_final_v2'
+# TAG = 'lo-tsz_final'
 
 def calc_stacked_profile(corr, est):
     print(corr, est)
@@ -39,6 +43,16 @@ def calc_stacked_profile(corr, est):
     np.savetxt(stack_fn, stack_arr)
     np.savetxt(std_fn, std_arr)
 
+    # calculate covariance and correlation matrices
+    covmat = np.cov(stack_arr.T)
+    corrmat = np.corrcoef(stack_arr.T)
+
+    # save cov and corr matrices
+    cov_fn = os.path.join(MOCKS_DIR, '%s_%s_covmat.txt'%(corr, est))
+    corr_fn = os.path.join(MOCKS_DIR, '%s_%s_corrmat.txt'%(corr, est))
+    np.savetxt(cov_fn, covmat)
+    np.savetxt(corr_fn, corrmat)
+
     # calculate average profile
     tot_stack = np.average(stack_arr, axis=0)
     # error on the mean => include 1/sqrt(N)
@@ -51,7 +65,7 @@ def calc_stacked_profile(corr, est):
     r = np.linspace(1., 6., 9)
     tot_stack_info = np.vstack((r, tot_stack, tot_std)).T
     print('tot_stack_info:', tot_stack_info.shape)
-    np.savetxt(MOCKS_DIR+'%s_%s_avg-stack-measured.txt'%(corr, est), tot_stack_info)
+    np.savetxt(os.path.join(MOCKS_DIR,'%s_%s_avg-stack-measured.txt'%(corr, est)), tot_stack_info)
 
 def calc_diff_profile(corr1, corr2, est):
     print(corr1, corr2, est)
@@ -117,6 +131,16 @@ def calc_diff_profile(corr1, corr2, est):
     np.savetxt(stack_fn, stack_arr)
     # np.savetxt(std_fn, std_arr)
 
+    # calculate covariance and correlation matrices
+    covmat = np.cov(stack_arr.T)
+    corrmat = np.corrcoef(stack_arr.T)
+
+    # save cov and corr matrices
+    cov_fn = os.path.join(MOCKS_DIR, '%s-MINUS-%s_%s_covmat.txt'%(corr1, corr2, est))
+    corr_fn = os.path.join(MOCKS_DIR, '%s-MINUS-%s_%s_corrmat.txt'%(corr1, corr2, est))
+    np.savetxt(cov_fn, covmat)
+    np.savetxt(corr_fn, corrmat)
+
     # calculate average profile
     tot_stack = np.average(stack_arr, axis=0)
 
@@ -132,7 +156,7 @@ def calc_diff_profile(corr1, corr2, est):
     np.savetxt(MOCKS_DIR+'%s-MINUS-%s_%s_avg-stack-measured.txt'%(corr1, corr2, est), tot_stack_info)
 
 def calc_lens_diff_profile(est):
-    """calculate the exact mean lensing bias for the TI estimator.
+    """calculate the mean lensing bias (to first order) for the TI estimator.
     This is CMBxCMB + lensedCMBxlensedCMB - lensedCMBxCMB - CMBxlensedCMB.
     """
     cmbcmb_fn = glob.glob(
@@ -234,8 +258,16 @@ def main():
     #              'cmb+lens_x_cmb_lensnorm']
 
     # for lo-tsz run
-    corr_type = ['cmb+tsz-lpf_tsz-hpf',
-                 'cmb_x_tsz_tsznorm']
+    # corr_type = ['cmb+tsz-lpf_tsz-hpf',
+    #              'cmb_x_tsz_tsznorm']
+
+    # hi-tsz+lens_final_v2 run 
+#     corr_type = ['cmb-lpf_cmb-hpf',
+#                  'cmb+tsz-lpf_cmb+tsz-hpf',
+#                  'cmb+lens-lpf_cmb+lens-hpf']
+# 
+    # for unwise_x_act sims
+    corr_type = ['cmb-lpf_cmb-hpf']
 
     # diff_type = [(corr_type[0], corr_type[1]), # lensing bias
     #              (corr_type[3], corr_type[2])] # tsz mean bias
@@ -247,17 +279,24 @@ def main():
     #              (corr_type[3], corr_type[5])] # exact but noisy lensing bias for sgn
 
     # for lo-tsz run
-    diff_type = [(corr_type[0], corr_type[1])] # exact tsz mean bias for TI, approx for sgn
+    # diff_type = [(corr_type[0], corr_type[1])] # exact tsz mean bias for TI, approx for sgn
+
+    # hi-tsz+lens_final_v2 run
+    # diff_type = [(corr_type[1], corr_type[0]), # approx tsz mean bias
+    #              (corr_type[2], corr_type[0])] # approx lensing bias
+
+    # for unwise_x_act sims
+    diff_type = None
 
     est_type = ['ti', 'sgn']
 
     for corr in corr_type:
         for est in est_type:
             calc_stacked_profile(corr, est)
-
-    for diff in diff_type:
-        for est in est_type:
-            calc_diff_profile(diff[0], diff[1], est)
+    if diff_type is not None:
+        for diff in diff_type:
+            for est in est_type:
+                calc_diff_profile(diff[0], diff[1], est)
 
 if __name__ == '__main__':
     main()

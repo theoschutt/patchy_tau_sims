@@ -3,6 +3,7 @@
 import os, sys
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import stats, special, optimize
 
 def parse_args():
     import argparse
@@ -18,6 +19,12 @@ def parse_args():
         '--signal_file',
         type=str,
         help='path to signal radial profile txt data file'
+    )
+    parser.add_argument(
+        '--hartlap',
+        default=1.,
+        type=float,
+        help='Hartlap factor to apply to covariance matrices. [default: 1]'
     )
     parser.add_argument(
         '--unwise_only',
@@ -47,7 +54,7 @@ def write_log(args, outfile):
         for arg in arg_dict:
             f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
 
-def calc_snr_per_object(datavector, cov, N=7659):
+def calc_snr_per_object(datavector, cov, N=515095):
     snr_sq = datavector @ np.linalg.solve(cov, datavector)
     snr_per_object = np.sqrt(snr_sq / N)
     print('snr_sq:', snr_sq)
@@ -62,6 +69,7 @@ def calc_snr_expt(snr_per_object, n_gal_dict, print_snr=True):
     if print_snr:
         for gal_survey, snr in zip(n_gal_dict, snr_expt_list):
             print(gal_survey, n_gal_dict[gal_survey], '--->', '%.3f'%snr)
+
     return snr_expt_list
 
 def calc_snr_unwise_blue(signal_dv, noise_cov_files):
@@ -86,15 +94,35 @@ def print_snr_table():
     """generate table string to print to terminal"""
     raise NotImplementedError()
 
-def write_snr_tables(snr_expt_list, outfile):
-    """write latex formatted and more human-readable tables
-    for SNR values
+def write_snr_table(args, cov_file, n_gal_dict, snr_expt_list):
+    """write human-readable tables for SNR values.
     """
-    snr_fn =  outfile + '.txt'
+    snr_fn =  args.outfile + '.txt'
     print('Writing SNR file:', snr_fn)
-    with open(log_fn, 'w') as f:
-        for snr in snr_expt_list:
-            f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
+    with open(snr_fn, 'a') as f:
+        print(args.signal_file, file=f)
+        print(cov_file, file=f)
+        for gal_survey, snr in zip(n_gal_dict, snr_expt_list):
+            print(f'{gal_survey}, {n_gal_dict[gal_survey]}, ---> {snr:.3f}', file=f)
+        print('--------------------', file=f)
+
+# TODO: check math
+def calc_pte(datavector, cov, dof=9):
+
+    print('DoF:', dof)
+    datavector = datavector[:dof]
+    cov = cov[:dof,:dof]
+    chi2_null = datavector @ np.linalg.solve(cov, datavector)
+    print('Chi2_null:', chi2_null)
+
+    pte_null = 1. - stats.chi2.cdf(chi2_null, dof)
+    print('PTE_null:', pte_null)
+
+    fsigma_to_pte = lambda sigma: special.erfc(sigma/np.sqrt(2.)) - pte_null
+    sigma_null = optimize.brentq(fsigma_to_pte , 0., 1.e3)
+    print(f'Null PTE significance: {sigma_null} sigma')
+
+    return chi2_null, pte_null, sigma_null
 
 def main():
     args = parse_args()
@@ -123,9 +151,10 @@ def main():
 
     for cov_file in args.noise_cov_files:
         print(cov_file)
-        cov = np.genfromtxt(cov_file)
+        cov = np.genfromtxt(cov_file) * args.hartlap
         snr_per_obj = calc_snr_per_object(signal_dv, cov)
         snr_expt = calc_snr_expt(snr_per_obj, advact_gal_dict)
+        write_snr_table(args, cov_file, advact_gal_dict, snr_expt)
 
 if __name__ == '__main__':
     main()

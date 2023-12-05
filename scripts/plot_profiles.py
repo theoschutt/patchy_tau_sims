@@ -120,19 +120,19 @@ def plot_signal_with_noise_band(data_txt_list, noise_txt_list, fn, title, labels
     formats = ['x', 'x']
     formats = ['o', 'D']
 
-    rad2arcmin = 180. * 60. / np.pi
+    #rad2arcmin = 180. * 60. / np.pi
 
     # tau_dat = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10s10_tau-fwhm_renorm2.45e-4_v3_c-1.0_willfilt/tauring_tau_ti_uniformweight_measured.txt')
-    tau_dat = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_tau_ti_uniformweight_measured.txt')
-    areas = np.genfromtxt('/home/theo/Documents/research/CMB/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_filtarea.txt')[0,:]
+    tau_dat = np.genfromtxt('/home/groups/roodman/schutt20/cmb/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_tau_ti_uniformweight_measured.txt')
+    areas = np.genfromtxt('/home/groups/roodman/schutt20/cmb/patchy_tau_sims/output/thumbstack/cmass_m_10x10_tau_beam1.6_final/tauring_filtarea.txt')[0,:]
     print(areas)
-    areas *= rad2arcmin**2
+    # areas *= rad2arcmin**2
     print(areas)
     r = tau_dat[:,0]
     plot_r = r.copy()
     plot_r[0] -= 0.1
     plot_r[-1] += 0.1
-    tau = tau_dat[:,1] * rad2arcmin**2
+    tau = tau_dat[:,1]# * rad2arcmin**2
     print(tau)
     # divide by ring area to get mean tau
     # areas = r.copy()
@@ -175,11 +175,12 @@ def plot_signal_with_noise_band(data_txt_list, noise_txt_list, fn, title, labels
         print(txt)
         dat = np.genfromtxt(txt)
         r = dat[:,0]
-        t = dat[:,1] * rad2arcmin**2 / areas
-        t_err = dat[:,2] * rad2arcmin**2 / areas
-
+        t = dat[:,1] / areas # * rad2arcmin**2 / areas
+        t_err = dat[:,2] / areas # * rad2arcmin**2 / areas
+        print('t/area:', t)
+        print('terr/area:', t_err)
         noise_dat = np.genfromtxt(noise)
-        noise_err = noise_dat[:,2] * rad2arcmin**2 / areas
+        noise_err = noise_dat[:,2] / areas #* rad2arcmin**2 / areas
 
         ax.fill_between(plot_r, -noise_err * np.sqrt(7659/59000000), noise_err * np.sqrt(7659/59000000), color=colors[i], alpha=0.2, label="%s stat err"%labels[i], zorder=12-i)
         #ax.fill_between(plot_r, t-t_err, t+t_err, color=darker_colors[i], alpha=0.4, label="%s bias"%labels[i], zorder=8-i)
@@ -262,6 +263,70 @@ def plot_signal_ratios(data_txt_list, fn, title, labels, lss):
     plt.savefig(fn+'.pdf', metadata=dict(Subject=str(data_txt_list)), dpi=300, bbox_inches='tight')
     plt.savefig(fn+'.png', dpi=100, bbox_inches='tight')
 
+#from https://joseph-long.com/writing/colorbars/
+def colorbar(mappable):
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    import matplotlib.pyplot as plt
+    last_axes = plt.gca()
+    ax = mappable.axes
+    fig = ax.figure
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = fig.colorbar(mappable, cax=cax)
+    cax.grid(False)
+    plt.sca(last_axes)
+    return cbar
+
+def plot_covcorr(covcorr_fn_list, out_fn):
+    cov = np.genfromtxt(covcorr_fn_list[0])
+    corr = np.genfromtxt(covcorr_fn_list[1])
+
+    # rad2arcmin = 180. * 60. / np.pi
+
+    # cov *= rad2arcmin**4
+
+    fig, axs = plt.subplots(1,2, figsize=(21, 8)) # , sharey=True)
+
+    # stolen from thumbstack plotCov
+    # pcolor wants x and y to be edges of cell,
+    # ie one more element, and offset by half a cell
+    rmin = 1.
+    rmax = 6.
+    n_ap = 9
+    dR = (rmax - rmin) / n_ap
+    RApEdgesArcmin = np.linspace(rmin-0.5*dR, rmax+0.5*dR, n_ap+1)
+    X, Y = np.meshgrid(RApEdgesArcmin, RApEdgesArcmin, indexing='ij')
+
+    for i, mat in enumerate((cov, corr)):
+        ax = axs[i]
+
+        if i == 1:
+            vmax=1.
+            vmin=-1.
+        else:
+            maxnorm = np.max(np.abs(cov))
+            vmax = maxnorm
+            vmin = -maxnorm
+
+        im = ax.pcolormesh(X, Y, mat, vmin=vmin, vmax=vmax, cmap='RdBu_r')
+        cb = colorbar(im)
+        if i == 0:
+            cb.set_label(r'var($\tau_{\rm int}$) [arcmin$^4$]')
+
+        ax.set_aspect('equal')
+        ax.grid(False)
+        ax.set_xlim((np.min(RApEdgesArcmin), np.max(RApEdgesArcmin)))
+        ax.set_ylim((np.min(RApEdgesArcmin), np.max(RApEdgesArcmin)))
+        ax.set_xlabel(r'R [arcmin]')
+        ax.set_ylabel(r'R [arcmin]')
+    #
+    axs[0].set(title='Covariance Matrix')
+    axs[1].set(title='Correlation Matrix')
+
+    fig.savefig(out_fn + '.png', bbox_inches='tight')
+    fig.savefig(out_fn + '.pdf', bbox_inches='tight')
+
+
 def write_log(args, outfile):
     # Write text file logging what command line args were used
     log_fn =  outfile + '_args.log'
@@ -292,8 +357,11 @@ def main():
     elif args.plot_type == 'tau_ratio':
         plot_signal_ratios(args.data_files, args.outfile, args.title, args.labels, args.ls)
 
+    elif args.plot_type == 'cov':
+        plot_covcorr(args.data_files, args.outfile)
     else:
         raise ValueError('Invalid plot type specified:', args.plot_type)
 
 if __name__ == '__main__':
     main()
+

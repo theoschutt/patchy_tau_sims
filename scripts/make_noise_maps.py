@@ -1,6 +1,6 @@
 import os, sys
 sys.path.append('../../ThumbStack')
-sys.path.append('../../LensQuEst')
+# sys.path.append('../../LensQuEst')
 import numpy as np
 import fitsio
 #import flat_map
