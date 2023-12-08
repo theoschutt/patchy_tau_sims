@@ -27,6 +27,13 @@ def parse_args():
         help='Hartlap factor to apply to covariance matrices. [default: 1]'
     )
     parser.add_argument(
+        '--n_gal',
+        default=515095,
+        type=int,
+        help='Number of galaxies in the signal map. [default: 515095]'
+    )
+
+    parser.add_argument(
         '--unwise_only',
         default=False,
         action='store_const',
@@ -54,7 +61,8 @@ def write_log(args, outfile):
         for arg in arg_dict:
             f.write('%s: %s\n'%(str(arg), str(arg_dict[arg])))
 
-def calc_snr_per_object(datavector, cov, N=515095):
+def calc_snr_per_object(datavector, cov, N):
+    # CMASS: N=7659, unWISE: N=515095
     snr_sq = datavector @ np.linalg.solve(cov, datavector)
     snr_per_object = np.sqrt(snr_sq / N)
     print('snr_sq:', snr_sq)
@@ -152,7 +160,7 @@ def main():
     for cov_file in args.noise_cov_files:
         print(cov_file)
         cov = np.genfromtxt(cov_file) * args.hartlap
-        snr_per_obj = calc_snr_per_object(signal_dv, cov)
+        snr_per_obj = calc_snr_per_object(signal_dv, cov, args.n_gal)
         snr_expt = calc_snr_expt(snr_per_obj, advact_gal_dict)
         write_snr_table(args, cov_file, advact_gal_dict, snr_expt)
 
