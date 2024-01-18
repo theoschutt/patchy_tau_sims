@@ -1,17 +1,33 @@
+# figure.figsize : 3.35, 2.79
+# figure.autolayout : True
+# axes.linewidth : 0.5
+# axes.axisbelow : False
+# font.monospace : Computer Modern Typewriter
+# axes.titlesize : 10
+# axes.labelsize : 10
+# font.size : 8.5
+# xtick.labelsize : 8.5
+# ytick.labelsize : 8.5
+# legend.fontsize : 8.5
+# legend.title_fontsize : 8.5
+
+figure.figsize : 5.5, 5
 axes.titlesize : 22
-axes.labelsize : 22
+axes.labelsize : 18
 axes.linewidth : 1
 axes.grid : True
 
+# lines.linewidth : 0.8
 lines.linewidth : 1.5
-legend.fontsize : 18
+legend.fontsize : 15
 legend.title_fontsize : 18
 
 font.family : serif
 text.usetex : True
+text.latex.preamble : \usepackage{mlmodern}
 
-xtick.labelsize : 18
-ytick.labelsize : 18
+xtick.labelsize : 15
+ytick.labelsize : 15
 xtick.direction : in
 ytick.direction : in
 xtick.major.width : 1.
