@@ -51,35 +51,67 @@ def equalize_signs(t_large, weights, est, i_bootstrap):
 
     return weights, norm
 
-def do_bootstrap(n_bootstrap, t_small, t_large):
+def do_bootstrap(i_bootstrap, t_small, t_large):
     """do the bootstrap resampling and return the samples for ti and sgn."""
 
     print(f'Performing bootstrap sampling with {n_bootstrap} iterations.')
     # will have shape (n_bootstrap, n_apertures)
-    ti_boot_resamples = np.empty((n_bootstrap, t_small.shape[1]))
-    sgn_boot_resamples = np.empty((n_bootstrap, t_small.shape[1]))
+#     ti_boot_resamples = np.empty((n_bootstrap, t_small.shape[1]))
+#     sgn_boot_resamples = np.empty((n_bootstrap, t_small.shape[1]))
     n_obj = len(t_small)
     all_idx = np.arange(n_obj)
 
-    for i in range(n_bootstrap):
-        if i%1000 == 0:
-            print('Bootstrap index:', i)
-        rng = np.random.default_rng(i)
-        idx = rng.choice(all_idx, size=n_obj, replace=True)
+#    for i in range(n_bootstrap):
+   if i_bootstrap%1000 == 0:
+       print('Bootstrap index:', i_bootstrap)
+   rng = np.random.default_rng(i_bootstrap)
+   idx = rng.choice(all_idx, size=n_obj, replace=True)
 
-        ts = t_small[idx,:]
-        tl = t_large[idx,:]
+   ts = t_small[idx,:]
+   tl = t_large[idx,:]
+   boot_resamples = []
+   for est, boot_resamples in zip(['ti', 'sgn'], [ti_boot_resamples, sgn_boot_resamples]):
+       weights, norm = get_w_and_norm(tl, est)
+       weights, norm = equalize_signs(tl, weights, est, i_bootstrap)
 
-        for est, boot_resamples in zip(['ti', 'sgn'], [ti_boot_resamples, sgn_boot_resamples]):
-            weights, norm = get_w_and_norm(tl, est)
-            weights, norm = equalize_signs(tl, weights, est, i)
+       stack = norm * np.sum(ts * weights, axis=0)
+       # sStack = norm * np.sqrt(np.sum(np.var(ts, axis=0) * weights**2, axis=0))
+       # print(stack)
+       # boot_resamples[i_bootstrap,:] = stack
+       boot_resamples.append(stack)
 
-            stack = norm * np.sum(ts * weights, axis=0)
-            # sStack = norm * np.sqrt(np.sum(np.var(ts, axis=0) * weights**2, axis=0))
-            # print(stack)
-            boot_resamples[i,:] = stack
+    # return ti_boot_resamples, sgn_boot_resamples
+    return boot_resamples
 
-    return ti_boot_resamples, sgn_boot_resamples
+# def do_bootstrap(n_bootstrap, t_small, t_large):
+#     """do the bootstrap resampling and return the samples for ti and sgn."""
+# 
+#     print(f'Performing bootstrap sampling with {n_bootstrap} iterations.')
+#     # will have shape (n_bootstrap, n_apertures)
+#     ti_boot_resamples = np.empty((n_bootstrap, t_small.shape[1]))
+#     sgn_boot_resamples = np.empty((n_bootstrap, t_small.shape[1]))
+#     n_obj = len(t_small)
+#     all_idx = np.arange(n_obj)
+# 
+#     for i in range(n_bootstrap):
+#         if i%1000 == 0:
+#             print('Bootstrap index:', i)
+#         rng = np.random.default_rng(i)
+#         idx = rng.choice(all_idx, size=n_obj, replace=True)
+# 
+#         ts = t_small[idx,:]
+#         tl = t_large[idx,:]
+# 
+#         for est, boot_resamples in zip(['ti', 'sgn'], [ti_boot_resamples, sgn_boot_resamples]):
+#             weights, norm = get_w_and_norm(tl, est)
+#             weights, norm = equalize_signs(tl, weights, est, i)
+# 
+#             stack = norm * np.sum(ts * weights, axis=0)
+#             # sStack = norm * np.sqrt(np.sum(np.var(ts, axis=0) * weights**2, axis=0))
+#             # print(stack)
+#             boot_resamples[i,:] = stack
+# 
+#     return ti_boot_resamples, sgn_boot_resamples
 
 def calc_and_save_cov(boot_resamples, outpath):
     """what it says on the tin."""
@@ -96,7 +128,7 @@ def main():
     print(f'Loading data from {outdir}')
     t_small = np.genfromtxt(os.path.join(outdir, 'tauring_filtmap.txt'))
     t_large = np.genfromtxt(os.path.join(outdir, 'tauring_filtnoisestddev.txt'))
-
+    # TODO: add sharedmem stuff
     n_bootstrap = 10000
     ti_boot_resamples, sgn_boot_resamples = do_bootstrap(n_bootstrap, t_small, t_large)
 
