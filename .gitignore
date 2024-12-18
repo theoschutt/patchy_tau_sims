@@ -1,0 +1,8 @@
+**/*.fits
+**/*.png
+**/*.pdf
+**/*.log
+**/*.err
+**/*.out
+**/.ipynb_checkpoints/*
+**/*.swp
