@@ -177,6 +177,7 @@ def plot_signal_with_noise_band(data_txt_list, noise_txt_list, fn, title, labels
         r = dat[:,0]
         t = dat[:,1] / areas # * rad2arcmin**2 / areas
         t_err = dat[:,2] / areas # * rad2arcmin**2 / areas
+        print('r:', r)
         print('t/area:', t)
         print('terr/area:', t_err)
         noise_dat = np.genfromtxt(noise)

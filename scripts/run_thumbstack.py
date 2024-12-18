@@ -147,7 +147,10 @@ def setup_maps(lpf_path, hpf_path, side_length=10., ra_min=200.,
 def end2end(args):
 
     # Write text file logging what command line args were used
-    outpath = os.path.join(args.workdir, "output/thumbstack/"+args.tsname)
+    if args.outpath is None:
+        outpath = os.path.join(args.workdir, "output/thumbstack/"+args.tsname)
+    else:
+        outpath = os.path.join(args.outpath, args.tsname)
     if not os.path.exists(outpath):
        os.makedirs(outpath)
     log_fn = os.path.join(outpath, '%s_args.log'%args.tsname)

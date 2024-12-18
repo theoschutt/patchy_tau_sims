@@ -14,10 +14,11 @@ from cmb import *
 # load catalogs
 # 7642 entries over [200<RA<210, 10<DEC<20]
 # catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/grid_10x10_10x10src_periodic/catalog.txt'
-catpath = '/home/groups/roodman/schutt20/cmb/patchy_tau_sims/data/dc2/dc2_10x10_imag-lt-25.txt'
+catpath = '/home/groups/roodman/schutt20/cmb/patchy_tau_sims/output/catalog/unwise_green_10x10_v2/catalog.txt'
+# catpath = '/home/groups/roodman/schutt20/cmb/patchy_tau_sims/data/dc2/dc2_10x10_imag-lt-25.txt'
 # catpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_v2/catalog.txt'
 # randcatpath = '/home/theo/Documents/research/CMB/patchy_tau_sims/output/catalog/cmass_m_10x10_randradec_v2/catalog.txt'
-catname = 'dc2_10x10_imag-lt-25'
+catname = 'unwise_green_10x10_nomask_correct_norm_v2'
 # catname = 'grid_10x10_10x10src_periodic'
 # catname = 'cmass_m_10x10_v2_fwhm5'
 # randname = '%s_randradec'%catname
@@ -48,8 +49,8 @@ cmass10x10 = Catalog(
     massConversion,
     name=catname,
     pathInCatalog=catpath,
-    # save=True,
-    save=False,
+    save=True,
+    # save=False,
     catType=cattype,
     workDir='..'
 )
@@ -88,6 +89,7 @@ boxMask = enmap.ones(shape, wcs=wcs)
 # automatically writes maps
 fwhm = 5.
 sigma = fwhm / np.sqrt(8.*np.log(2))
+sigma = None
 test = False
-cmass10x10.generateMockMaps(boxMask, sigma=sigma, test=test)
+cmass10x10.generateMockMaps(boxMask, sigma=sigma, test=test, make_vel_map=False)
 #cmass10x10rand.generateMockMaps(boxMask, sigma=sigma, test=test)

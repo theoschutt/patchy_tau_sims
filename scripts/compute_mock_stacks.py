@@ -21,12 +21,12 @@ def main():
     #     't_large_den' : 'cmb+lens-lpf_cmb+lens-hpf',
     #     'tag' : 'cmb+lens_x_cmb_lensnorm'
     # }
-    args = {
-        't_small' : 'cmb+lens-lpf_cmb+lens-hpf',
-        't_large_num' : 'cmb-lpf_cmb-hpf',
-        't_large_den' : 'cmb+lens-lpf_cmb+lens-hpf',
-        'tag' : 'cmb_x_cmb+lens_lensnorm'
-    }
+    # args = {
+    #     't_small' : 'cmb+lens-lpf_cmb+lens-hpf',
+    #     't_large_num' : 'cmb-lpf_cmb-hpf',
+    #     't_large_den' : 'cmb+lens-lpf_cmb+lens-hpf',
+    #     'tag' : 'cmb_x_cmb+lens_lensnorm'
+    # }
     # args = {
     #     't_small' : 'cmb+tsz-lpf_tsz-hpf',
     #     't_large_num' : 'cmb-lpf_cmb-hpf',
@@ -34,10 +34,26 @@ def main():
     #     'tag' : 'cmb_x_tsz_tsznorm'
     # }
 
+    args = {
+        't_small' : 'cmb+lens-lpf_cmb+lens-hpf',
+        't_large_num' : 'cmb+lens-lpf_cmb+lens-hpf',
+        't_large_den' : 'cmb+lens-lpf_cmb+lens-hpf',
+        'tag' : 'cmb+lens_x_cmb+lens_matched-eqsgn'
+    }
+#     args = {
+#         't_small' : 'cmb-lpf_cmb-hpf',
+#         't_large_num' : 'cmb-lpf_cmb-hpf',
+#         't_large_den' : 'cmb-lpf_cmb-hpf',
+#         'tag' : 'cmb_x_cmb_matched-eqsgn'
+#     }
+
+
+
     # get the files
     # dir_stem = ('/home/theo/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/tsz+lens_100mocks_eqsgn_v2.1/tsz+lens*seed*/output/thumbstack/')
     # dir_stem_orig = ('/home/theo/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/hi-tsz+lens_final_100mocks_eqsgn*/hi-tsz+lens_final_*/hi-tsz+lens_final_*mocks_eqsgn_*_seed*/output/thumbstack/')
-    dir_stem = ('/home/theo/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/hi-tsz+lens_final_200mocks_eqsgn*/hi-tsz+lens_final_*/hi-tsz+lens_final_*mocks_eqsgn_*_seed*/output/thumbstack/')
+    # dir_stem = ('/home/theo/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/hi-tsz+lens_final_200mocks_eqsgn*/hi-tsz+lens_final_*/hi-tsz+lens_final_*mocks_eqsgn_*_seed*/output/thumbstack/')
+    dir_stem = ('../output/multi_mock_runs/hi-tsz+lens_final_200mocks_eqsgn*/hi-tsz+lens_final_*/hi-tsz+lens_final_*mocks_eqsgn_*_seed*/output/thumbstack/')
     # dir_stem = ('/home/theo/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/lo-tsz_final_200mocks_eqsgn*/lo-tsz_final_*/lo-tsz_final_*mocks_eqsgn_*_seed*/output/thumbstack/')
     outdirs = glob.glob(dir_stem)
     # dir_stem = ('/media/theo/1TB_WD_Passport/2023_ubuntu_backup/Documents/research/CMB/patchy_tau_sims/output/multi_mock_runs/hi-tsz+lens_100mocks_eqsgn/tsz+lens*seed*/output/thumbstack/')
@@ -55,7 +71,7 @@ def main():
     print(t_large_den_list[40])
 
     # basically do compute_stack main() for each seed
-    for out, ts_fn, tln_fn, tld_fn in zip(outdirs, t_small_list, t_large_num_list, t_large_den_list):
+    for i, (out, ts_fn, tln_fn, tld_fn) in enumerate(zip(outdirs, t_small_list, t_large_num_list, t_large_den_list)):
         # make new dir in the seed's thumbstack dir
         path_out = os.path.join(out, args['tag'])
         if not os.path.exists(path_out):
@@ -66,7 +82,8 @@ def main():
         ts, tln, tld = load_photometry(ts_fn, tln_fn, tld_fn)
 
         for est in ['ti', 'sgn']:
-            stack, sStack = compute_stack(ts, tln, tld, est, None, True)
+            stack, sStack = compute_stack(ts, tln, tld, est, None, True, seed=i)
+            print(i, stack)
             save_stack(stack, sStack, est, path_out)
 
 if __name__ == '__main__':

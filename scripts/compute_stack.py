@@ -38,7 +38,7 @@ def parse_args():
 
     return args
 
-def compute_stack(t_small, t_large, t_large_norm, est, t_large_min, balance_signs):
+def compute_stack(t_small, t_large, t_large_norm, est, t_large_min, balance_signs, seed=None):
     if t_large_min is not None:
         mask = np.abs(t_large_norm[:,0]) >= t_large_min
         print(len(t_small), sum(mask[:]), mask.shape)
@@ -65,10 +65,9 @@ def compute_stack(t_small, t_large, t_large_norm, est, t_large_min, balance_sign
                idxExcess = np.where(t_large_norm[:,0] > 0)[0]
             else:
                idxExcess = np.where(t_large_norm[:,0] < 0)[0]
+            
             # randomly select N=diff samples of the excess signed weights
-            # TODO: We probably want this selection to be reproducible. How to pick seed?
-            #       Do we want the same samples removed for all bootstrap iterations?
-            rng = np.random.default_rng()
+            rng = np.random.default_rng(seed)
             idxToRemove = rng.choice(idxExcess, np.abs(diff), replace=False)
             # now set the weights of those randoms to zero so
             # they are effectively removed from the stack

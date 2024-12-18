@@ -102,7 +102,7 @@ def print_snr_table():
     """generate table string to print to terminal"""
     raise NotImplementedError()
 
-def write_snr_table(args, cov_file, n_gal_dict, snr_expt_list):
+def write_snr_table(args, cov_file, n_gal_dict, snr_per_obj, snr_expt_list):
     """write human-readable tables for SNR values.
     """
     snr_fn =  args.outfile + '.txt'
@@ -110,6 +110,8 @@ def write_snr_table(args, cov_file, n_gal_dict, snr_expt_list):
     with open(snr_fn, 'a') as f:
         print(args.signal_file, file=f)
         print(cov_file, file=f)
+        print(f'Hartlap factor: {args.hartlap}', file=f)
+        print(f'SNR per object ({args.n_gal} gals): {snr_per_obj}', file=f)
         for gal_survey, snr in zip(n_gal_dict, snr_expt_list):
             print(f'{gal_survey}, {n_gal_dict[gal_survey]}, ---> {snr:.3f}', file=f)
         print('--------------------', file=f)
@@ -162,7 +164,7 @@ def main():
         cov = np.genfromtxt(cov_file) * args.hartlap
         snr_per_obj = calc_snr_per_object(signal_dv, cov, args.n_gal)
         snr_expt = calc_snr_expt(snr_per_obj, advact_gal_dict)
-        write_snr_table(args, cov_file, advact_gal_dict, snr_expt)
+        write_snr_table(args, cov_file, advact_gal_dict, snr_per_obj, snr_expt)
 
 if __name__ == '__main__':
     main()
